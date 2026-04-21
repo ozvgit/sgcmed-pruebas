@@ -1,0 +1,200 @@
+/* estilos.css v1.2 - SGCMED */
+:root {
+    --primary: #0077b6;
+    --secondary: #636e72;
+    --success: #2a9d8f;
+    --bg: #f8f9fa;
+    --text: #2d3436;
+    --white: #ffffff;
+    --border: #e9ecef;
+}
+
+/* 1. Reseteo y Base */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body { 
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+    max-width: 1000px; 
+    margin: 0 auto; 
+    padding: 15px; 
+    background-color: var(--bg); 
+    color: var(--text); 
+    line-height: 1.5;
+}
+
+h1 {
+    color: var(--primary);
+    text-align: center;
+    margin: 20px 0;
+    font-size: 1.8rem;
+}
+
+/* 2. Contenedores Principales */
+.card { 
+    background: var(--white); 
+    padding: 20px; 
+    margin-bottom: 20px; 
+    border-radius: 12px; 
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    border: 1px solid var(--border);
+}
+
+/* 3. Formulario - Evita deformación */
+.form-grid {
+    display: grid;
+    /* Cambiado de auto-fit a una estructura más controlada */
+    grid-template-columns: repeat(2, 1fr); 
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+label { 
+    font-size: 0.85rem; 
+    font-weight: 700; 
+    color: var(--primary); 
+    display: block; 
+    margin-bottom: 5px; 
+}
+
+input, textarea, select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color 0.3s ease;
+    outline: none;
+}
+
+input:focus, textarea:focus {
+    border-color: var(--primary);
+}
+
+textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+/* 4. Secciones Colapsables */
+.collapsible {
+    background-color: #ffffff;
+    color: var(--primary);
+    cursor: pointer;
+    padding: 15px;
+    width: 100%;
+    border: 1px solid var(--border);
+    text-align: left;
+    font-size: 1rem;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 8px;
+    margin-top: 10px;
+}
+
+.active, .collapsible:hover { background-color: #f1f7fd; border-color: var(--primary); }
+
+.content {
+    padding: 15px;
+    display: none; /* Controlado por JS */
+    background-color: white;
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+}
+
+/* 5. Secciones con Scroll */
+.scroll-section {
+    max-height: 250px;
+    overflow-y: auto;
+    border: 1px solid #f1f1f1;
+    padding: 10px;
+    background: #fdfdfd;
+    border-radius: 6px;
+}
+
+/* 6. Historial de Visitas (Anidado) */
+.visita-item {
+    margin-bottom: 8px;
+    border-left: 4px solid var(--primary);
+}
+
+.collapsible-inner {
+    background-color: #f8f9fa;
+    color: var(--text);
+    padding: 10px;
+    width: 100%;
+    border: 1px solid var(--border);
+    text-align: left;
+    font-size: 0.9rem;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.content-inner {
+    padding: 10px;
+    display: none;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-top: none;
+    font-size: 0.85rem;
+}
+
+/* 7. Botones */
+.btn { 
+    border: none; 
+    padding: 15px; 
+    border-radius: 8px; 
+    cursor: pointer; 
+    font-weight: bold; 
+    font-size: 1rem;
+    transition: 0.2s; 
+}
+
+.btn-save { 
+    background: var(--success); 
+    color: white; 
+    width: 100%; 
+    margin-top: 15px;
+}
+
+.btn-save:hover { filter: brightness(1.1); }
+
+.btn-cancel { 
+    background: var(--secondary); 
+    color: white; 
+    width: 100%; 
+    margin-top: 8px; 
+}
+
+/* 8. Buscador */
+.search-box { 
+    margin: 15px 0; 
+    padding: 15px; 
+    border-radius: 30px; 
+    border: 2px solid var(--border); 
+    width: 100%; 
+}
+
+/* --- RESPONSIVIDAD --- */
+@media (max-width: 768px) {
+    .form-grid {
+        grid-template-columns: 1fr; /* Una sola columna en tablets y móviles */
+    }
+    
+    body {
+        padding: 10px;
+    }
+    
+    h1 {
+        font-size: 1.5rem;
+    }
+}

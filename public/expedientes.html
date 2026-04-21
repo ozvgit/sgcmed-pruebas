@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SGCMED PRUEBAS - Expedientes v1.6</title>
+    <link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+
+    <h1>⚕️ Sistema de Gestión de Expedientes - Pruebas</h1>
+
+    <div class="card">
+        <form id="form-expediente">
+            <input type="hidden" id="edit-id"> 
+            
+            <div class="form-grid">
+                <div>
+                    <label>Nombre del Paciente</label>
+                    <input type="text" id="nombre" required placeholder="Nombre completo">
+                </div>
+                <div>
+                    <label>Edad</label>
+                    <input type="number" id="edad" required>
+                </div>
+                <div>
+                    <label>Fecha de Visita</label>
+                    <input type="date" id="fechaVisita" required>
+                </div>
+                <div>
+                    <label>Tipo de Paciente</label>
+                    <select id="tipo">
+                        <option value="Regular">Regular</option>
+                        <option value="Irregular">Irregular</option>
+                    </select>
+                </div>
+            </div>
+
+            <button type="button" class="collapsible">Información de Contacto <span>+</span></button>
+            <div class="content">
+                <label>Contacto de Emergencia (Opcional)</label>
+                <input type="text" id="contacto" placeholder="Nombre y teléfono">
+            </div>
+
+            <button type="button" class="collapsible">Historia Clínica y Padecimiento <span>+</span></button>
+            <div class="content">
+                <div class="input-focus-group">
+                    <label>Historia Clínica</label>
+                    <textarea id="historia" maxlength="200" rows="6">ALERGIAS: &#10;ANTECEDENTES: </textarea>
+                    <div class="char-count"><span id="count-historia">0</span>/200</div>
+
+                    <label>Padecimiento Actual</label>
+                    <textarea id="padecimiento" maxlength="200" rows="6">MOTIVO: &#10;SÍNTOMAS: </textarea>
+                    <div class="char-count"><span id="count-padecimiento">0</span>/200</div>
+                </div>
+            </div>
+
+            <button type="button" class="collapsible">Diagnóstico y Receta <span>+</span></button>
+            <div class="content">
+                <div class="input-focus-group">
+                    <label>Diagnóstico</label>
+                    <textarea id="diagnostico" maxlength="200" rows="6">CIE-10: &#10;NOTAS: </textarea>
+                    <div class="char-count"><span id="count-diagnostico">0</span>/200</div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <label>Receta Médica</label>
+                        <button type="button" class="btn-print-icon">🖨️</button>
+                    </div>
+                    <textarea id="receta" maxlength="200" rows="8">PESO:    kg | TEMP:    °C&#10;P.ART:      | TALLA:   cm&#10;---&#10;RECETA: </textarea>
+                    <div class="char-count"><span id="count-receta">0</span>/200</div>
+                </div>
+            </div>
+
+            <button type="button" class="collapsible">Historial de Visitas (Expediente) <span>+</span></button>
+            <div class="content">
+                <div class="scroll-section" id="expediente-lista">
+                    <div class="visita-item">
+                        <button type="button" class="collapsible-inner">📅 15/03/2026 - Consulta General <span>+</span></button>
+                        <div class="content-inner">
+                            <p><strong>Signos:</strong> 75kg | 36.5°C | 120/80</p>
+                            <p><strong>Diagnóstico:</strong> Gastritis leve.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-save" id="btn-main">💾 Guardar Expediente</button>
+            <button type="button" class="btn btn-cancel" id="btn-cancel" style="display:none;">Cancelar Edición</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>🔍 Buscar Paciente</h3>
+        <input type="text" id="busqueda" class="search-box" placeholder="Buscar por nombre...">
+        <div id="lista-pacientes"></div>
+    </div>
+
+    <script>
+        function initCollapsibles() {
+            const buttons = document.querySelectorAll('.collapsible, .collapsible-inner');
+            buttons.forEach(btn => {
+                btn.onclick = function(e) {
+                    e.preventDefault();
+                    this.classList.toggle("active");
+                    const content = this.nextElementSibling;
+                    const span = this.querySelector('span');
+                    content.style.display = (content.style.display === "block") ? "none" : "block";
+                    span.innerText = (content.style.display === "block") ? "-" : "+";
+                };
+            });
+        }
+
+        function setupCharCounters() {
+            const fields = ['historia', 'padecimiento', 'diagnostico', 'receta'];
+            fields.forEach(id => {
+                const area = document.getElementById(id);
+                const counter = document.getElementById(`count-${id}`);
+                const update = () => {
+                    const val = area.value.length;
+                    counter.innerText = val;
+                    if (val >= 200) counter.classList.add('limit-reached');
+                    else counter.classList.remove('limit-reached');
+                };
+                area.addEventListener('input', update);
+                update(); 
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initCollapsibles();
+            setupCharCounters();
+        });
+    </script>
+</body>
+</html>

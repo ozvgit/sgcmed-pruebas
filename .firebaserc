@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "sgifjs"
+  },
+  "targets": {
+    "sgifjs": {
+      "hosting": {
+        "sgcmed-pruebas": [
+          "sgcmed-pruebas"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

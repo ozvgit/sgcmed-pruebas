@@ -1,0 +1,17 @@
+{
+  "short_name": "Expedientes",
+  "name": "Sistema de Registro de Expedientes - Pruebas",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "expedientes.html",
+  "background_color": "#ffffff",
+  "theme_color": "#3085d6",
+  "display": "standalone",
+  "orientation": "portrait"
+}
