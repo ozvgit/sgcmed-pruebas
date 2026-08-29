@@ -7,6 +7,9 @@
       "hosting": {
         "sgcmed-pruebas": [
           "sgcmed-pruebas"
+        ],
+        "sgcmed": [
+          "sgcmed"
         ]
       }
     }

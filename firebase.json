@@ -2,20 +2,59 @@
   "hosting": {
     "target": "sgcmed-pruebas",
     "public": "public",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
     "rewrites": [
       {
-        "source": "/",
-        "destination": "/expedientes.html"
+        "source": "/core-busqueda",
+        "destination": "/js/busqueda.js"
+      },
+      {
+        "source": "/gestion-medica",
+        "destination": "/js/app-pruebas.js"
       },
       {
         "source": "**",
-        "destination": "/expedientes.html"
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "/sw.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          },
+          {
+            "key": "Service-Worker-Allowed",
+            "value": "/"
+          }
+        ]
+      },
+      {
+        "source": "/core-busqueda",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate, proxy-revalidate"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/javascript"
+          }
+        ]
+      },      
+      {
+        "source": "/gestion-medica",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          }
+        ]
       }
     ]
+  },
+  "functions": {
+    "source": "functions"
   }
 }

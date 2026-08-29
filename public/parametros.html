@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SGCMED - Configuración de Parámetros</title>
+    <link rel="stylesheet" href="estilos/estilos.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+
+    <div style="display: flex; align-items: center; gap: 20px; margin-top: 20px;">
+        <button onclick="window.location.href='index.html'" class="btn" style="background: #6c757d; color: white; width: auto;">⬅️ Volver</button>
+        <h1>⚙️ Configuración Global de Parámetros</h1>
+        <button id="btn-logout" class="btn" style="background:#dc3545;color:white;width:auto;">
+        🚪 Salir
+        </button>
+    </div>
+
+    <div class="card" style="margin-top: 20px;">
+        <form id="form-config">
+            <div class="form-grid">
+                <!-- Parámetro: Paginación -->
+                <div>
+                    <label>Cantidad de registros por página (Buscador)</label>
+                    <select id="cfg_paginacion" required>
+                        <option value="5">5 registros</option>
+                        <option value="10">10 registros</option>
+                        <option value="20">20 registros</option>
+                        <option value="50">50 registros</option>
+                    </select>
+                </div>
+
+                <!-- Parámetro: Estilo de Interfaz -->
+                <div>
+                    <label>Estilo de botones en tabla</label>
+                    <select id="cfg_estilo_botones">
+                        <option value="completo">Texto e Iconos</option>
+                        <option value="minimal">Solo Iconos (Compacto)</option>
+                    </select>
+                </div>
+
+                <!-- Parámetro: Entorno -->
+                <div>
+                    <label>Entorno de Ejecución</label>
+                    <input type="text" id="cfg_entorno" value="PRUEBAS_V2.1" readonly style="background: #eee;">
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <button type="submit" id="btn-save-cfg" class="btn btn-save" style="background: var(--primary);">
+                    💾 Guardar Configuración en la Nube
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <script type="module">
+
+        import { auth, functions, db } from '/js/config.js';
+        import { onAuthStateChanged, signOut} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { httpsCallable } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js";
+        import { ref, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        const form = document.getElementById('form-config');
+        const btnSave = document.getElementById('btn-save-cfg');
+        onAuthStateChanged(auth, (user) => {
+            if (!user) {
+                window.location.href = "login.html";
+                return;
+            }
+        });
+        // 1. Cargar configuración actual al abrir la página
+        async function cargarConfiguracion() {
+            const administrarConfig = httpsCallable(functions, 'administrarConfiguracion');
+            try {
+                // Llamamos a la función con la acción 'obtener'
+                const resultado = await administrarConfig({ accion: 'obtener' });
+                const cfg = resultado.data; // onCall devuelve los datos en .data
+
+                if (cfg) {
+                    document.getElementById('cfg_paginacion').value = cfg.paginacion || 10;
+                    document.getElementById('cfg_estilo_botones').value = cfg.estiloBotones || 'completo';
+                }
+            } catch (error) {
+                console.error("Error cargando config vía Function:", error);
+                // Opcional: SweetAlert de error
+            }
+        }
+
+        // 2. Guardar vía Cloud Function
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            btnSave.disabled = true;
+            btnSave.innerText = "⏳ Sincronizando...";
+
+            const administrarConfig = httpsCallable(functions, 'administrarConfiguracion');
+            
+            const nuevosDatos = {
+                paginacion: parseInt(document.getElementById('cfg_paginacion').value),
+                estiloBotones: document.getElementById('cfg_estilo_botones').value,
+                ultimaActualizacion: new Date().toISOString()
+            };
+
+            try {
+                await administrarConfig({ accion: 'actualizar', datos: nuevosDatos });
+                Swal.fire('¡Éxito!', 'Los parámetros han sido actualizados globalmente.', 'success');
+            } catch (error) {
+                Swal.fire('Error', 'No se pudo actualizar la configuración.', 'error');
+            } finally {
+                btnSave.disabled = false;
+                btnSave.innerText = "💾 Guardar Configuración en la Nube";
+            }
+        });
+
+        cargarConfiguracion();
+        const btnLogout =  document.getElementById('btn-logout');
+
+        if (btnLogout) {
+
+            btnLogout.addEventListener('click', async () => {
+
+                const respuesta = await Swal.fire({
+                    title: 'Cerrar sesión',
+                    text: '¿Desea salir de SGCMED?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Salir',
+                    cancelButtonText: 'Cancelar'
+                });
+
+                if (!respuesta.isConfirmed) {
+                    return;
+                }
+
+                try {
+
+                    await signOut(auth);
+
+                    window.location.href =
+                        'login.html';
+
+                } catch (error) {
+
+                    console.error(error);
+
+                    Swal.fire(
+                        'Error',
+                        'No fue posible cerrar la sesión.',
+                        'error'
+                    );
+
+                }
+
+            });
+
+        }
+    </script>
+    <script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('✅ Service Worker registrado', reg))
+        .catch(err => console.warn('❌ Fallo al registrar Service Worker', err));
+    });
+  }
+</script>
+</body>
+</html>

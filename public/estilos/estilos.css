@@ -1,0 +1,427 @@
+/* estilos.css v1.3.5 - SGCMED - FULL RESPONSIVE INTEGRATED */
+:root {
+    --primary: #0077b6;
+    --secondary: #636e72;
+    --success: #2a9d8f;
+    --bg: #f8f9fa;
+    --text: #2d3436;
+    --white: #ffffff;
+    --border: #e9ecef;
+}
+
+/* 1. Reseteo y Base */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body { 
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+    max-width: 1000px; 
+    margin: 0 auto; 
+    padding: 15px; 
+    background-color: var(--bg); 
+    color: var(--text); 
+    line-height: 1.5;
+    overflow-x: hidden;
+}
+
+h1 {
+    color: var(--primary);
+    text-align: center;
+    margin: 20px 0;
+    font-size: 1.8rem;
+}
+
+/* 2. Barra de Acciones y Grid de Formularios */
+.action-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.btn-main-action {
+    flex: 1;
+    min-width: 140px;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: white;
+}
+
+.card {
+    background: var(--white);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    border: 1px solid var(--border);
+    margin-bottom: 20px;
+    width: 100%;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+/* 3. Inputs y Controles */
+label {
+    display: block;
+    font-weight: 700;
+    margin-bottom: 5px;
+    font-size: 0.85rem;
+    color: var(--primary);
+}
+
+input, select, textarea {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color 0.3s ease;
+    outline: none;
+    background: white;
+}
+
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+textarea {
+    resize: vertical;
+    font-family: inherit;
+}
+
+/* 4. Sistema de Botones */
+.btn {
+    padding: 10px 15px;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    width: 100%;
+    text-align: center;
+}
+
+.btn:active { transform: scale(0.98); }
+
+.btn-save {
+    background-color: var(--success);
+    color: var(--white);
+    margin-top: 15px;
+}
+.btn-save:hover { background-color: #21867a; }
+
+.btn-cancel {
+    background-color: var(--secondary);
+    color: var(--white);
+    margin-top: 10px;
+}
+.btn-cancel:hover { background-color: #525b5e; }
+
+/* 5. Componentes Desplegables (Collapsibles) */
+.collapsible {
+    background-color: #ffffff;
+    color: var(--primary);
+    cursor: pointer;
+    padding: 15px;
+    width: 100%;
+    border: 1px solid var(--border);
+    text-align: left;
+    font-size: 1rem;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 8px;
+    margin-top: 10px;
+}
+
+.content {
+    padding: 15px;
+    display: none;
+    background-color: white;
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+}
+
+/* 6. Control de Tablas y Listas */
+.scroll-section {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid #f1f1f1;
+    padding: 5px;
+    background: #fdfdfd;
+    border-radius: 6px;
+    -webkit-overflow-scrolling: touch;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+}
+
+.btn-mini-round {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    border: none;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+}
+.btn-mini-round:hover { transform: scale(1.1); }
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+}
+
+.btn-pag {
+    min-width: 36px;
+    height: 36px;
+    padding: 0 6px;
+    border: 1px solid var(--border);
+    background-color: var(--white);
+    color: var(--text);
+    font-weight: 600;
+    font-size: 0.9rem;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.btn-pag:disabled { opacity: 0.4; cursor: not-allowed; }
+.active-pag { background-color: var(--primary) !important; border-color: var(--primary) !important; color: var(--white) !important; }
+.pag-ellipsis { min-width: 30px; text-align: center; color: var(--secondary); font-weight: bold; }
+
+.macro-section {
+    border-left: 4px solid var(--primary);
+    margin-bottom: 20px;
+    border-radius: 4px;
+    background: #fff;
+}
+
+.char-count { text-align: right; font-size: 0.8rem; color: #888; margin-top: 2px; }
+.char-count.limit-reached { color: #d90429; font-weight: bold; }
+
+.btn-print-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.3rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+.btn-print-icon:hover { background-color: #f1f5f9; }
+.visita-item { margin-bottom: 8px; }
+
+/* 7. ESTILOS OCULTOS DE LA RECETA EN INTERFAZ COMÚN */
+#print-prescription-container {
+    display: none;
+}
+
+/* --- 8. REGLAS RESPONSIVAS --- */
+@media (max-width: 768px) {
+    .form-grid, .card div[style*="display: grid"], .content div[style*="display: grid"], .form-grid div[style*="display: grid"] {
+        grid-template-columns: 1fr !important;
+        gap: 10px;
+    }
+    .form-grid > div { width: 100%; }
+    .action-bar { flex-direction: column; }
+    .btn-main-action { width: 100%; }
+    body { padding: 10px; }
+    h1 { font-size: 1.5rem; }
+    .card { padding: 15px; }
+    .btn-pag { min-width: 32px; height: 32px; font-size: 0.85rem; }
+}
+
+/* ==========================================================================
+   🖨️ ENGINE DE IMPRESIÓN SEGURO: AJUSTE ESTRICTO A 1 SOLA HOJA (SGCMED)
+   ========================================================================== */
+/* ==========================================================================
+   🖨️ ENGINE DE IMPRESIÓN SEGURO: CONTROL DE LOGOS Y MONO-HOJA STRICT
+   ========================================================================== */
+/* ==========================================================================
+   🖨️ ENGINE DE IMPRESIÓN SEGURO: CONTROL DE LOGOS POR FONDO (1 SOLA HOJA)
+   ========================================================================== */
+@media print {
+    @page {
+        size: letter;
+        margin: 8mm 12mm 8mm 12mm;
+    }
+
+    /* Ocultar la aplicación web de fondo excepto la receta */
+    body > :not(#print-prescription-container) {
+        display: none !important;
+    }
+
+    body {
+        background-color: #ffffff !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        font-family: 'Arial', sans-serif !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    #print-prescription-container {
+        display: block !important;
+        visibility: visible !important;
+        width: 100% !important;
+        box-sizing: border-box;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* Cabecera distribuida simétricamente */
+    .rx-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 2px solid #143a60;
+        padding-bottom: 6px;
+        margin-bottom: 10px;
+    }
+
+    /* FORZAR RENDERIZADO DE LOGOS MEDIANTE CAPAS DE FONDO DEL NAVEGADOR */
+    .logo-izq {
+        width: 70px;
+        height: 75px;
+        background-image: url('../imagenes/logo1.png') !important; /* Ruta relativa desde la carpeta estilos/ hacia imagenes/ */
+        background-size: contain !important;
+        background-repeat: no-repeat !important;
+        background-position: left center !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        display: block !important;
+    }
+
+    .logo-der {
+        width: 70px;
+        height: 55px;
+        background-image: url('../imagenes/logo2.png') !important; /* Ruta relativa desde la carpeta estilos/ hacia imagenes/ */
+        background-size: contain !important;
+        background-repeat: no-repeat !important;
+        background-position: right center !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        display: block !important;
+    }
+
+    .rx-twin-blocks {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 10px;
+    }
+
+    .rx-box-container {
+        border: 1.5px solid #000000;
+        border-radius: 6px;
+        overflow: hidden;
+        background: #ffffff;
+        page-break-inside: avoid;
+    }
+
+    .rx-box-title {
+        background-color: #f2f2f2 !important;
+        text-align: center;
+        font-weight: bold;
+        padding: 4px;
+        font-size: 0.85rem;
+        border-bottom: 1.5px solid #000000;
+        text-transform: uppercase;
+        color: #000000;
+    }
+
+    .rx-box-body {
+        padding: 6px 8px;
+        font-size: 0.8rem;
+        line-height: 1.35;
+    }
+
+    .rx-prescription-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .rx-prescription-table th {
+        background-color: #f2f2f2 !important;
+        font-weight: bold;
+        font-size: 0.8rem;
+        padding: 5px;
+        text-align: center;
+        border-bottom: 1.5px solid #000000;
+        color: #000000;
+    }
+
+    .rx-prescription-table td {
+        padding: 6px 8px;
+        font-size: 0.8rem;
+        vertical-align: top;
+        line-height: 1.3;
+    }
+
+    .rx-border-right {
+        border-right: 1.5px solid #000000;
+    }
+
+    .rx-footer-area {
+        margin-top: 25px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        page-break-inside: avoid;
+    }
+
+    .rx-signature-line {
+        width: 250px;
+        border-bottom: 1.5px solid #000000;
+        margin-bottom: 4px;
+    }
+
+    .rx-signature-caption {
+        font-size: 0.8rem;
+        color: #000000;
+        line-height: 1.25;
+    }
+
+    .rx-slogan-bottom {
+        text-align: center;
+        font-size: 0.7rem;
+        color: #555555;
+        margin-top: 20px;
+        border-top: 1px dashed #cccccc;
+        padding-top: 4px;
+        width: 100%;
+    }
+}

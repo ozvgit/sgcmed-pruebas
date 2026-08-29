@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SGCMED - Búsqueda de Expedientes v1.4</title>
+    <link rel="stylesheet" href="estilos/estilos.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        .btn-mini-round {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s;
+        }
+        .btn-mini-round:hover {
+            transform: scale(1.1);
+        }
+        .active-pag {
+            background-color: var(--primary) !important;
+            color: white !important;
+        }
+        .btn-group-search {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        @media (max-width: 768px) {
+            .btn-group-search {
+                grid-template-columns: 1fr !important; /* Apila los 3 botones en una sola columna en móviles */
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>⚕️ Control de Expedientes Médicos</h1>
+    <!--div id="consola-logs" style="height: 200px; overflow-y: scroll; border: 1px solid #ccc; background: #000;"></div>
+    <button id="btn-ejecutar-carga">🚀 Iniciar Carga de 400 Pacientes Simulados</button>
+    <div class="card" style="border: 2px solid #ff4d4d; padding: 20px; border-radius: 8px;">
+        <h3>⚠️ Área de Administración Crítica</h3>
+        <p>Esta acción eliminará todos los registros de expedientes. <strong>Esta operación no tiene marcha atrás.</strong></p>
+        
+        <div style="margin-bottom: 15px;">
+            <label>Escribe "BORRAR" para activar el botón:</label>
+            <input type="text" id="confirmacion-borrado" placeholder="Escribe aquí..." class="form-control">
+        </div>
+        
+        <button id="btn-ejecutar-borrado" class="btn btn-danger" style="background-color: #ff4d4d; color: white; border: none; padding: 10px 20px; cursor: pointer;">
+            🔥 Borrar Todos los Expedientes
+        </button>
+    </div-->
+
+    <div class="action-bar">
+        <button class="btn-main-action btn-add" onclick="window.location.href='expedientes.html'">
+            <span class="icon">➕</span> Nuevo Expediente
+        </button>
+        <button class="btn-main-action btn-excel" id="btn-exportar">
+            <span class="icon">📊</span> Exportar Reporte
+        </button>
+        <button class="btn-main-action btn-config" onclick="window.location.href='parametros.html'" style="background: var(--secondary); color: white;">
+            <span class="icon">⚙️</span> Parámetros del Sistema
+        </button>
+        <button class="btn-main-action" id="btn-logout" style="background:#dc3545;color:white;">
+            🚪 Cerrar Sesión
+        </button>
+    </div>
+
+    <div class="card">
+        <h3>🔍 Criterios de Búsqueda</h3>
+        <div class="form-grid">
+            <div>
+                <label>Nombre del Paciente</label>
+                <input type="text" id="busqueda-nombre" placeholder="Buscar por nombre...">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div>
+                    <label>Desde</label>
+                    <input type="date" id="fecha-inicio">
+                </div>
+                <div>
+                    <label>Hasta</label>
+                    <input type="date" id="fecha-fin">
+                </div>
+            </div>
+        </div>
+        <div class="btn-group-search" style="grid-template-columns: repeat(3, 1fr);">
+            <button id="btn-buscar" class="btn btn-save" style="background: var(--primary); margin-top: 0; width: 100%;">🔍 Buscar Activos</button>
+            
+            <button id="btn-buscar-historico" class="btn" style="background: #6c757d; color: white; margin-top: 0; width: 100%; font-weight: 600;">📜 Archivo (5 Años)</button>
+            
+            <button id="btn-limpiar" class="btn" style="background: var(--secondary); color: white; margin-top: 0; width: 100%;">🧹 Limpiar</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3>Resultados de Búsqueda</h3>
+            <span id="contador-resultados" style="font-size: 0.9rem; color: var(--secondary);">Listo para buscar</span>
+        </div>
+        
+        <div class="scroll-section">
+            <table id="tabla-resultados" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="text-align: left; border-bottom: 2px solid var(--border); position: sticky; top: 0; background: white;">
+                        <th style="padding: 12px;">Paciente</th>
+                        <th style="padding: 12px;">Última Visita</th>
+                        <th style="padding: 12px; text-align: center;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="lista-pacientes">
+                    </tbody>
+            </table>
+        </div>
+
+        <div class="pagination" style="display: flex; justify-content: center; gap: 5px; margin-top: 20px;"></div>
+    </div>
+
+<script type="module" src="/core-busqueda"></script>
+<!--script type="module" src="/js/carga-masiva.js"></script>
+<script type="module" src="/js/borrado.js"></script-->
+<!--script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('✅ Service Worker registrado', reg))
+        .catch(err => console.warn('❌ Fallo al registrar Service Worker', err));
+    });
+  }
+</script-->
+</body>
+</html>

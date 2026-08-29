@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SGCMED - Herramientas de Desarrollo</title>
+    <link rel="stylesheet" href="estilos/estilos.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        .console-box {
+            background-color: #1e1e1e;
+            color: #39ff14;
+            font-family: 'Consolas', 'Courier New', monospace;
+            padding: 15px;
+            border-radius: 8px;
+            height: 250px;
+            overflow-y: auto;
+            margin-top: 15px;
+            font-size: 0.9rem;
+            border: 1px solid #333;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 20px;">
+        <button onclick="window.location.href='index.html'" class="btn" style="background: var(--secondary); color: white; padding: 10px 20px; width: auto; margin: 0;">⬅️ Volver al Inicio</button>
+        <h1 style="margin: 0; font-size: 1.5rem;">⚙️ Panel de Pruebas de Carga</h1>
+        <div style="width: 120px;"></div> 
+    </div>
+
+    <div class="card" style="margin-top: 20px;">
+        <h2>Inyección Masiva de Datos de Control</h2>
+        <p style="margin: 10px 0; color: var(--secondary); font-size: 0.95rem;">
+            Esta utilidad generará e inyectará de forma atómica **400 expedientes clínicos** con marcas de tiempo distribuidas a lo largo del último año. Cada paciente contará de forma aleatoria con **1, 2 o 3 consultas** completas registradas en su historial para evaluar el estrés de la paginación, filtros por fecha de visita y exportación a CSV.
+        </p>
+        
+        <button id="btn-ejecutar-carga" class="btn btn-save" style="background: var(--primary); margin-top: 15px; padding: 15px;">
+            🚀 Iniciar Carga de 400 Pacientes Simulados
+        </button>
+
+        <h3 style="margin-top: 25px;">Consola de Salida</h3>
+        <div id="consola-logs" class="console-box">
+            <div class="log-entry" style="color: #888;">[Sistema] Listo para iniciar operaciones...</div>
+        </div>
+    </div>
+
+    <script type="module" src="/js/carga-masiva.js"></script>
+</body>
+</html>

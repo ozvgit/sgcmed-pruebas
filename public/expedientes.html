@@ -3,133 +3,167 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SGCMED PRUEBAS - Expedientes v1.6</title>
-    <link rel="stylesheet" href="estilos.css">
+    <title>SGCMED PRUEBAS - Expedientes v2.3</title>
+    <link rel="stylesheet" href="estilos/estilos.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
 
-    <h1>⚕️ Sistema de Gestión de Expedientes - Pruebas</h1>
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 20px;">
+        <button onclick="window.location.href='index.html'" class="btn" style="background: var(--secondary); color: white; padding: 10px 20px; width: auto; margin: 0;">⬅️ Volver</button>
+        <h1 style="margin: 0; font-size: 1.5rem;">⚕️ Gestión de Expediente v2.3</h1>
+        <button id="btn-logout" class="btn" style="background:#dc3545;color:white;padding:10px 20px;width:auto;margin:0;">🚪 Salir</button>
+    </div>
 
-    <div class="card">
+    <div class="card" style="margin-top: 20px;">
         <form id="form-expediente">
             <input type="hidden" id="edit-id"> 
-            
-            <div class="form-grid">
-                <div>
-                    <label>Nombre del Paciente</label>
-                    <input type="text" id="nombre" required placeholder="Nombre completo">
-                </div>
-                <div>
-                    <label>Edad</label>
-                    <input type="number" id="edad" required>
-                </div>
-                <div>
-                    <label>Fecha de Visita</label>
-                    <input type="date" id="fechaVisita" required>
-                </div>
-                <div>
-                    <label>Tipo de Paciente</label>
-                    <select id="tipo">
-                        <option value="Regular">Regular</option>
-                        <option value="Irregular">Irregular</option>
-                    </select>
-                </div>
-            </div>
+            <div id="contenedor-secciones">
+                <div class="macro-section">
+                    <button type="button" class="collapsible" style="background-color: #e8f0fe;">🩺 Consulta Actual (Visita) <span>+</span></button>
+                    <div class="content" style="display: block;">
+                        
+                        <div class="form-grid" style="padding: 10px 0;">
+                            <div>
+                                <label>Nombre del Paciente</label>
+                                <input type="text" id="nombre" required placeholder="Nombre completo">
+                            </div>
+                            <div>
+                                <label>Edad</label>
+                                <input type="number" id="edad" required>
+                            </div>
+                            <div>
+                                <label>Fecha de Visita</label>
+                                <input type="date" id="fechaVisita" required>
+                            </div>
+                            <div>
+                                <label>Tipo de Paciente</label>
+                                <select id="tipo">
+                                    <option value="Regular">Regular</option>
+                                    <option value="Irregular">Irregular</option>
+                                </select>
+                            </div>
+                        </div>
 
-            <button type="button" class="collapsible">Información de Contacto <span>+</span></button>
-            <div class="content">
-                <label>Contacto de Emergencia (Opcional)</label>
-                <input type="text" id="contacto" placeholder="Nombre y teléfono">
-            </div>
-
-            <button type="button" class="collapsible">Historia Clínica y Padecimiento <span>+</span></button>
-            <div class="content">
-                <div class="input-focus-group">
-                    <label>Historia Clínica</label>
-                    <textarea id="historia" maxlength="200" rows="6">ALERGIAS: &#10;ANTECEDENTES: </textarea>
-                    <div class="char-count"><span id="count-historia">0</span>/200</div>
-
-                    <label>Padecimiento Actual</label>
-                    <textarea id="padecimiento" maxlength="200" rows="6">MOTIVO: &#10;SÍNTOMAS: </textarea>
-                    <div class="char-count"><span id="count-padecimiento">0</span>/200</div>
-                </div>
-            </div>
-
-            <button type="button" class="collapsible">Diagnóstico y Receta <span>+</span></button>
-            <div class="content">
-                <div class="input-focus-group">
-                    <label>Diagnóstico</label>
-                    <textarea id="diagnostico" maxlength="200" rows="6">CIE-10: &#10;NOTAS: </textarea>
-                    <div class="char-count"><span id="count-diagnostico">0</span>/200</div>
-
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <label>Receta Médica</label>
-                        <button type="button" class="btn-print-icon">🖨️</button>
-                    </div>
-                    <textarea id="receta" maxlength="200" rows="8">PESO:    kg | TEMP:    °C&#10;P.ART:      | TALLA:   cm&#10;---&#10;RECETA: </textarea>
-                    <div class="char-count"><span id="count-receta">0</span>/200</div>
-                </div>
-            </div>
-
-            <button type="button" class="collapsible">Historial de Visitas (Expediente) <span>+</span></button>
-            <div class="content">
-                <div class="scroll-section" id="expediente-lista">
-                    <div class="visita-item">
-                        <button type="button" class="collapsible-inner">📅 15/03/2026 - Consulta General <span>+</span></button>
+                        <button type="button" class="collapsible-inner">✍️ Padecimiento Actual <span>+</span></button>
                         <div class="content-inner">
-                            <p><strong>Signos:</strong> 75kg | 36.5°C | 120/80</p>
-                            <p><strong>Diagnóstico:</strong> Gastritis leve.</p>
+                            <textarea id="padecimiento" maxlength="400" rows="4">MOTIVO: </textarea>
+                            <div class="char-count"><span id="count-padecimiento">0</span>/400</div>
+                        </div>
+
+                        <button type="button" class="collapsible-inner">📏 Exploración Física (Signos Vitales) <span>+</span></button>
+                        <div class="content-inner">
+                            <textarea id="receta" maxlength="600" rows="5">PESO:    kg | TEMP:    °C&#10;P.ART:      | TALLA:   cm&#10;F.R:        | F.C:       </textarea>
+                            <div class="char-count"><span id="count-receta">0</span>/600</div>
+                        </div>
+
+                        <button type="button" class="collapsible-inner">🧪 Estudios de Laboratorio y Gabinete <span>+</span></button>
+                        <div class="content-inner">
+                            <textarea id="estudios" maxlength="400" placeholder="Resultados de laboratorios, rayos X, etc."></textarea>
+                            <div class="char-count"><span id="count-estudios">0</span>/400</div>
+                        </div>
+
+                        <button type="button" class="collapsible-inner">🔍 Impresión Diagnóstica <span>+</span></button>
+                        <div class="content-inner">
+                            <textarea id="diagnostico" maxlength="200" rows="4">CIE-10: &#10;NOTAS: </textarea>
+                            <div class="char-count"><span id="count-diagnostico">0</span>/200</div>
+                        </div>
+
+                        <button type="button" class="collapsible-inner">💊 Pronóstico y Tratamiento <span>+</span></button>
+                        <div class="content-inner">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <label>Plan de Tratamiento / Receta</label>
+                                <button type="button" id="btn-imprimir-receta" class="btn-print-icon" title="Imprimir Receta">🖨️</button>
+                            </div>
+                            <textarea id="tratamiento" maxlength="400" placeholder="Plan de tratamiento y medicamentos..." style="height: 120px; width: 100%; box-sizing: border-box;"></textarea>
+                            <div class="char-count"><span id="count-tratamiento">0</span>/400</div>
+    
+                            <label style="margin-top: 10px; display: block;">Pronóstico</label>
+                            <select id="pronostico">
+                                <option value="Bueno">Bueno para la vida</option>
+                                <option value="Reservado">Reservado</option>
+                                <option value="Malo">Malo</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="macro-section">
+                    <button type="button" class="collapsible" style="background-color: #f0f4f8;">📂 Historia Clínica (Permanente) <span>+</span></button>
+                    <div class="content">
+                        <button type="button" class="collapsible-inner">📇 Ficha de Identificación <span>+</span></button>
+                        <div class="content-inner">
+                            <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                                <div><label>Nombre</label><input type="text" id="fi_nombre"></div>
+                                <div><label>Fecha</label><input type="date" id="fi_fecha"></div>
+                                <div style="grid-column: span 2;"><label>Domicilio</label><input type="text" id="fi_domicilio"></div>
+                                <div><label>Teléfono</label><input type="tel" id="fi_telefono"></div>
+                                <div><label>Nacimiento</label><input type="date" id="fi_nacimiento"></div>
+                                <div><label>Escolaridad</label><input type="text" id="fi_escolaridad"></div>
+                                <div><label>Ocupación</label><input type="text" id="fi_ocupacion"></div>
+                                <div>
+                                    <label>Estado Civil</label>
+                                    <select id="fi_estado_civil">
+                                        <option value="Soltero">Soltero(a)</option>
+                                        <option value="Casado">Casado(a)</option>
+                                        <option value="Divorciado">Divorciado(a)</option>
+                                        <option value="Viudo">Viudo(a)</option>
+                                        <option value="Union Libre">Unión Libre</option>
+                                    </select>
+                                </div>
+                                <div><label>Religión</label><input type="text" id="fi_religion"></div>
+                                <div><label>Informante</label><input type="text" id="fi_informante"></div>
+                                <div><label>Parentesco</label><input type="text" id="fi_parentesco"></div>
+                            </div>
+                        </div>
+
+                        <button type="button" class="collapsible-inner">📜 Antecedentes <span>+</span></button>
+                        <div class="content-inner">
+                            <div class="input-focus-group">
+                                <label>Heredofamiliares</label>
+                                <textarea id="ant_heredofamiliares" maxlength="200" rows="3"></textarea>
+                                <div class="char-count"><span id="count-ant_heredofamiliares">0</span>/200</div>
+
+                                <label>Personales Patológicos</label>
+                                <textarea id="ant_patologicos" maxlength="200" rows="3"></textarea>
+                                <div class="char-count"><span id="count-ant_patologicos">0</span>/200</div>
+
+                                <label>Personales No Patológicos</label>
+                                <textarea id="ant_no_patologicos" maxlength="200" rows="3"></textarea>
+                                <div class="char-count"><span id="count-ant_no_patologicos">0</span>/200</div>
+
+                                <label>Ginecoobstétricos</label>
+                                <textarea id="ant_gineco" maxlength="200" rows="3"></textarea>
+                                <div class="char-count"><span id="count-ant_gineco">0</span>/200</div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+            <button type="button" class="collapsible">📚 Historial de Visitas Anteriores <span>+</span></button>
+            <div class="content">
+                <div class="scroll-section" id="expediente-lista">
+                    </div>
+            </div>
 
             <button type="submit" class="btn btn-save" id="btn-main">💾 Guardar Expediente</button>
+            <!-- Botón para imprimir el expediente clínico completo -->
+            <!--button type="button" id="btn-imprimir-expediente" class="btn" style="background: var(--primary); color: white; margin-bottom: 10px;">🖨️ Imprimir Expediente Completo</button-->
             <button type="button" class="btn btn-cancel" id="btn-cancel" style="display:none;">Cancelar Edición</button>
         </form>
     </div>
 
-    <div class="card">
-        <h3>🔍 Buscar Paciente</h3>
-        <input type="text" id="busqueda" class="search-box" placeholder="Buscar por nombre...">
-        <div id="lista-pacientes"></div>
-    </div>
+    <div id="print-prescription-container"></div>
 
-    <script>
-        function initCollapsibles() {
-            const buttons = document.querySelectorAll('.collapsible, .collapsible-inner');
-            buttons.forEach(btn => {
-                btn.onclick = function(e) {
-                    e.preventDefault();
-                    this.classList.toggle("active");
-                    const content = this.nextElementSibling;
-                    const span = this.querySelector('span');
-                    content.style.display = (content.style.display === "block") ? "none" : "block";
-                    span.innerText = (content.style.display === "block") ? "-" : "+";
-                };
-            });
-        }
-
-        function setupCharCounters() {
-            const fields = ['historia', 'padecimiento', 'diagnostico', 'receta'];
-            fields.forEach(id => {
-                const area = document.getElementById(id);
-                const counter = document.getElementById(`count-${id}`);
-                const update = () => {
-                    const val = area.value.length;
-                    counter.innerText = val;
-                    if (val >= 200) counter.classList.add('limit-reached');
-                    else counter.classList.remove('limit-reached');
-                };
-                area.addEventListener('input', update);
-                update(); 
-            });
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            initCollapsibles();
-            setupCharCounters();
+    <script type="module" src="/js/app-pruebas.js"></script>
+    <!--script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('✅ Service Worker registrado', reg))
+            .catch(err => console.warn('❌ Fallo al registrar Service Worker', err));
         });
-    </script>
+      }
+    </script-->
 </body>
 </html>

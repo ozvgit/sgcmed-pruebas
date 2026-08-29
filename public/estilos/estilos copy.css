@@ -1,0 +1,194 @@
+/* estilos.css v1.3.2 - SGCMED - FULL RESPONSIVE */
+:root {
+    --primary: #0077b6;
+    --secondary: #636e72;
+    --success: #2a9d8f;
+    --bg: #f8f9fa;
+    --text: #2d3436;
+    --white: #ffffff;
+    --border: #e9ecef;
+}
+
+/* 1. Reseteo y Base */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body { 
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+    max-width: 1000px; 
+    margin: 0 auto; 
+    padding: 15px; 
+    background-color: var(--bg); 
+    color: var(--text); 
+    line-height: 1.5;
+    overflow-x: hidden;
+}
+
+h1 {
+    color: var(--primary);
+    text-align: center;
+    margin: 20px 0;
+    font-size: 1.8rem;
+}
+
+/* 2. Barra de Acciones */
+.action-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap; 
+}
+
+.btn-main-action {
+    flex: 1;
+    min-width: 140px;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: white;
+}
+
+/* 3. Contenedores y Card */
+.card { 
+    background: var(--white); 
+    padding: 20px; 
+    margin-bottom: 20px; 
+    border-radius: 12px; 
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    border: 1px solid var(--border);
+    width: 100%;
+}
+
+/* 4. Formulario - Estructura Base */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); 
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+label { 
+    font-size: 0.85rem; 
+    font-weight: 700; 
+    color: var(--primary); 
+    display: block; 
+    margin-bottom: 5px; 
+}
+
+input, textarea, select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color 0.3s ease;
+    outline: none;
+    background: white;
+}
+
+input:focus, select:focus { border-color: var(--primary); }
+
+/* 5. Secciones Colapsables (Historia Clínica) */
+.collapsible {
+    background-color: #ffffff;
+    color: var(--primary);
+    cursor: pointer;
+    padding: 15px;
+    width: 100%;
+    border: 1px solid var(--border);
+    text-align: left;
+    font-size: 1rem;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 8px;
+    margin-top: 10px;
+}
+
+.content {
+    padding: 15px;
+    display: none; 
+    background-color: white;
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+}
+
+/* 6. Control de Tablas */
+.scroll-section {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid #f1f1f1;
+    padding: 5px;
+    background: #fdfdfd;
+    border-radius: 6px;
+    -webkit-overflow-scrolling: touch;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+}
+
+/* 7. Botones Especiales */
+.btn-mini-round {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    border: none;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+}
+
+.btn-mini-round:hover { transform: scale(1.1); }
+
+.active-pag {
+    background-color: var(--primary) !important;
+    color: white !important;
+}
+
+/* --- 8. RESPONSIVIDAD TOTAL (Solución a image_66e357.png) --- */
+@media (max-width: 768px) {
+    /* Forzar que todas las grillas de formularios sean de una columna */
+    .form-grid, 
+    .card div[style*="display: grid"], 
+    .content div[style*="display: grid"],
+    .form-grid div[style*="display: grid"] {
+        grid-template-columns: 1fr !important;
+        gap: 10px;
+    }
+
+    /* Ajuste para que los labels e inputs no se encimen */
+    .form-grid > div {
+        width: 100%;
+    }
+
+    .action-bar {
+        flex-direction: column;
+    }
+
+    .btn-main-action {
+        width: 100%;
+    }
+
+    body { padding: 10px; }
+    h1 { font-size: 1.5rem; }
+    
+    /* Asegurar que la Ficha de Identificación no se desborde */
+    .card { padding: 15px; }
+}
