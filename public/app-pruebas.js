@@ -3,13 +3,8 @@ import { auth, db } from '/js/config.js';
 import { signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { ref, get, update, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { inicializarConexion, actualizarStatus } from "/js/conexion.js";
 const firestore = getFirestore(undefined, "historico-sgcem");
-// --- 1. PERSISTENCIA DE SESIÓN ---
-onAuthStateChanged(auth, (user) => {
-    if (user) console.log("🔐 Sesión activa");
-    else if (navigator.onLine) signInAnonymously(auth);
-});
-
 // --- 🔑 PASO 3: FUNCIÓN CORE PARA EXTRAER CONSULTAS DESDE AMBAS BASES DE DATOS ---
 async function obtenerDatosVisitaHibrida(pacienteId, visitaId) {
     console.log(`🔍 Buscando visita ${visitaId} para el paciente ${pacienteId}...`);
@@ -248,356 +243,6 @@ window.cargarVisitaEspecifica = function(pacienteId, visitaId) {
 };
 
 // --- 6. ENGINE DE IMPRESIÓN CON TELEMETRÍA DE DEBUG EN CONSOLA (F12) ---
-/*function configurarImpresionRecetaOld() {
-    const btnPrint = document.getElementById('btn-imprimir-receta');
-    if (!btnPrint) {
-        console.error("❌ DEBUG: No se encontró el botón '#btn-imprimir-receta' en el DOM.");
-        return;
-    }
-
-    btnPrint.addEventListener('click', async () => {
-        console.log("🚀 DEBUG: Click detectado en botón de impresión. Iniciando diagnóstico...");
-
-        const nombreVal = document.getElementById('nombre').value.trim();
-        const tratamientoVal = document.getElementById('tratamiento').value.trim();
-        const diagnosticoRaw = document.getElementById('diagnostico').value.trim();
-
-        // Validaciones preventivas
-        if (!nombreVal || !tratamientoVal || !diagnosticoRaw || diagnosticoRaw === "CIE-10: \nNOTAS:") {
-            console.warn("⚠️ DEBUG: Validación fallida. Campos obligatorios vacíos.");
-            return Swal.fire('Campos Incompletos', 'Asegúrese de llenar Nombre, Diagnóstico y Tratamiento antes de imprimir.', 'warning');
-        }
-
-        // --- DIAGNÓSTICO EN VIVO DE LAS RUTAS DE LOGOS ---
-        const imgUnamOriginal = "imagenes/logo2.png"; 
-        const imgFesiOriginal = "imagenes/logo1.png"; 
-
-        console.log(`🔍 DEBUG [Ruta 1]: Buscando Escudo UNAM en: "${window.location.origin}/${imgUnamOriginal}"`);
-        console.log(`🔍 DEBUG [Ruta 2]: Buscando Escudo FESI en: "${window.location.origin}/${imgFesiOriginal}"`);
-
-        // Crear elementos de prueba invisibles para forzar su pre-carga y medir dimensiones reales
-        const testImg1 = new Image();
-        const testImg2 = new Image();
-
-        testImg1.src = imgUnamOriginal;
-        testImg2.src = imgFesiOriginal;
-
-        // Monitorear carga del Escudo UNAM
-        testImg1.onload = () => {
-            console.log(`✅ DEBUG [Logo 1 UNAM]: ¡Cargado con ÉXITO! Tamaño real: ${testImg1.naturalWidth}x${testImg1.naturalHeight}px`);
-        };
-        testImg1.onerror = (err) => {
-            console.error("❌ DEBUG [Logo 1 UNAM]: Error crítico al cargar el archivo. Posibles causas: El archivo no existe en esa ruta, tiene mal las mayúsculas/minúsculas, o el Service Worker (sw.js) bloqueó la petición.");
-        };
-
-        // Monitorear carga del Escudo FESI
-        testImg2.onload = () => {
-            console.log(`✅ DEBUG [Logo 2 FESI]: ¡Cargado con ÉXITO! Tamaño real: ${testImg2.naturalWidth}x${testImg2.naturalHeight}px`);
-        };
-        testImg2.onerror = (err) => {
-            console.error("❌ DEBUG [Logo 2 FESI]: Error crítico al cargar el archivo. Posibles causas: El archivo no existe en esa ruta, tiene mal las mayúsculas/minúsculas, o el Service Worker (sw.js) bloqueó la petición.");
-        };
-
-        const edadVal = document.getElementById('edad').value || "0";
-        const fechaVisitaRaw = document.getElementById('fechaVisita').value;
-        
-        let fechaFormateada = "Fecha no disponible";
-        let fechaProximaCita = "A indicación médica";
-        if (fechaVisitaRaw) {
-            const dateObj = new Date(fechaVisitaRaw + "T00:00:00");
-            const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-            fechaFormateada = `${dateObj.getDate()} de ${meses[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
-            
-            const proximaCitaObj = new Date(fechaVisitaRaw + "T00:00:00");
-            proximaCitaObj.setMonth(proximaCitaObj.getMonth() + 1);
-            fechaProximaCita = `${proximaCitaObj.getDate()} de ${meses[proximaCitaObj.getMonth()]} ${proximaCitaObj.getFullYear()}`;
-        }
-
-        const signosRaw = document.getElementById('receta').value;
-        const extraerDato = (regex, defaultVal = "N/A") => {
-            const match = signosRaw.match(regex);
-            return match ? match[1].trim() : defaultVal;
-        };
-
-        const peso = extraerDato(/PESO:\s*([^\s|kg]+)/i, "test6");
-        const temp = extraerDato(/TEMP:\s*([^\s|°C]+)/i, "test6");
-        const part = extraerDato(/P\.ART:\s*([^\s|]+)/i, "test6");
-        const talla = extraerDato(/TALLA:\s*([^\s|cm]+)/i, "test6");
-        const fr = extraerDato(/F\.R:\s*([^\s|]+)/i, "test6");
-        const fc = extraerDato(/F\.C:\s*([^\s|]+)/i, "test6");
-
-        const diagnosticoVal = diagnosticoRaw.replace("CIE-10:", "").replace("NOTAS:", "").trim() || "Sin observaciones específicas.";
-
-        // Generar contenedor interno usando etiquetas IMG nativas estándar
-        const printContainer = document.getElementById('print-prescription-container');
-        if (!printContainer) {
-            console.error("❌ DEBUG: Error fatal. No existe el contenedor '#print-prescription-container' en tu archivo HTML.");
-            return;
-        }
-
-        printContainer.innerHTML = `
-            <div class="rx-header">
-                <div style="width: 15%; text-align: left;">
-                    <img src="${imgUnamOriginal}" alt="UNAM" style="height: 70px; max-height: 75px; width: auto; object-fit: contain;">
-                </div>
-                <div style="width: 70%; text-align: center; font-family: 'Georgia', serif; color: #143a60;">
-                    <h2 style="margin: 0; font-size: 1.35rem; font-weight: bold; color: #111;">DR. RAUL ALBERTO VILLALOBOS HERNÁNDEZ</h2>
-                    <p style="margin: 3px 0 0 0; font-size: 0.85rem; font-weight: bold; font-style: italic;">Médico Cirujano</p>
-                    <p style="margin: 1px 0 0 0; font-size: 0.8rem; font-weight: 500; color: #333;">Universidad Nacional Autónoma de México</p>
-                    <p style="margin: 2px 0 0 0; font-size: 0.8rem; font-weight: bold; color: #000;">CED. PROF. 9678858</p>
-                </div>
-                <div style="width: 15%; text-align: right;">
-                    <img src="${imgFesiOriginal}" alt="FESI UNAM" style="height: 52px; max-height: 55px; width: auto; object-fit: contain;">
-                </div>
-            </div>
-            <div class="rx-twin-blocks">
-                <div class="rx-box-container">
-                    <div class="rx-box-title">Datos del Paciente</div>
-                    <div class="rx-box-body">
-                        <strong>PACIENTE:</strong> ${nombreVal}<br>
-                        <strong>EDAD:</strong> ${edadVal} años <span style="float: right;"><strong>FECHA:</strong> ${fechaFormateada}</span><br>
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; margin-top:5px; border-top: 1px dashed #ddd; padding-top: 4px;">
-                            <div><strong>PESO:</strong> ${peso} kg</div>
-                            <div><strong>TALLA:</strong> ${talla} cm</div>
-                            <div><strong>TEMP:</strong> ${temp} °C</div>
-                            <div><strong>F.C.:</strong> ${fc}</div>
-                            <div><strong>F.R.:</strong> ${fr}</div>
-                            <div><strong>P.A.:</strong> ${part}</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="rx-box-container">
-                    <div class="rx-box-title">Diagnóstico Médico</div>
-                    <div class="rx-box-body">${diagnosticoVal.replace(/\n/g, '<br>')}</div>
-                </div>
-            </div>
-            <div class="rx-box-container" style="margin-bottom: 10px;">
-                <div class="rx-box-title">Receta y Prescripción</div>
-                <div style="background-color: #f2f2f2; text-align:center; font-weight:bold; font-size:0.75rem; padding:3px; border-bottom:1.5px solid #000000; text-transform:uppercase;">
-                    Indicaciones Médicas
-                </div>
-                <table class="rx-prescription-table">
-                    <thead>
-                        <tr>
-                            <th class="rx-border-right" style="width: 55%;">Medicamento / Dosis / Frecuencia / Duración</th>
-                            <th style="width: 45%;">Indicaciones Adicionales y Recomendaciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td class="rx-border-right" style="white-space: pre-line;">${tratamientoVal}</td>
-                            <td style="color:#333333;">
-                                - Dieta equilibrada e hidratación constante.<br>
-                                - Evitar suspender el tratamiento antes del tiempo indicado.<br>
-                                - En caso de presentar efectos adversos, comunicarse de inmediato.
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <!--div class="rx-box-container" style="width: 40%; margin-bottom: 12px;">
-                <div class="rx-box-body" style="padding: 4px 8px; font-size: 0.8rem;">
-                    <strong>PRÓXIMA CITA:</strong> ${fechaProximaCita}
-                </div>
-            </div-->
-            <div class="rx-footer-area">
-                <div class="rx-signature-line"></div>
-                <div class="rx-signature-caption">
-                    <strong>DR. RAUL ALBERTO VILLALOBOS HERNÁNDEZ</strong><br>
-                    Médico Cirujano - Cel:55-6785-6651
-                </div>
-            </div>
-            <div class="rx-slogan-bottom">
-                SGCmed - Soluciones Integrales de Salud | UNAM - Facultad de Medicina - FES Iztacala
-            </div>
-        `;
-
-        console.log("⚡ DEBUG: HTML inyectado en el nodo oculto. Disparando ventana de impresión native...");
-        
-        // Retraso controlado de 250ms para permitir que las promesas de carga del hilo de imágenes finalicen antes de congelar la ventana
-        setTimeout(() => {
-            window.print();
-        }, 250);
-    });
-}
-
-function configurarImpresionReceta() {
-    const btnPrint = document.getElementById('btn-imprimir-receta');
-    if (!btnPrint) {
-        console.error("❌ DEBUG: No se encontró el botón '#btn-imprimir-receta' en el DOM.");
-        return;
-    }
-
-    btnPrint.addEventListener('click', async () => {
-        console.log("🚀 DEBUG: Click detectado en botón de impresión. Iniciando diagnóstico...");
-
-        const nombreVal = document.getElementById('nombre').value.trim();
-        const tratamientoVal = document.getElementById('tratamiento').value.trim();
-        const diagnosticoRaw = document.getElementById('diagnostico').value.trim();
-
-        // Validaciones preventivas
-        if (!nombreVal || !tratamientoVal || !diagnosticoRaw || diagnosticoRaw === "CIE-10: \nNOTAS:") {
-            console.warn("⚠️ DEBUG: Validación fallida. Campos obligatorios vacíos.");
-            return Swal.fire('Campos Incompletos', 'Asegúrese de llenar Nombre, Diagnóstico y Tratamiento antes de imprimir.', 'warning');
-        }
-
-        // --- DIAGNÓSTICO EN VIVO DE LAS RUTAS DE LOGOS ---
-        const imgUnamOriginal = "imagenes/logo2.png"; 
-        const imgFesiOriginal = "imagenes/logo1.png"; 
-
-        console.log(`🔍 DEBUG [Ruta 1]: Buscando Escudo UNAM en: "${window.location.origin}/${imgUnamOriginal}"`);
-        console.log(`🔍 DEBUG [Ruta 2]: Buscando Escudo FESI en: "${window.location.origin}/${imgFesiOriginal}"`);
-
-        // Crear elementos de prueba invisibles para forzar su pre-carga y medir dimensiones reales
-        const testImg1 = new Image();
-        const testImg2 = new Image();
-
-        testImg1.src = imgUnamOriginal;
-        testImg2.src = imgFesiOriginal;
-
-        // Monitorear carga del Escudo UNAM
-        testImg1.onload = () => {
-            console.log(`✅ DEBUG [Logo 1 UNAM]: ¡Cargado con ÉXITO! Tamaño real: ${testImg1.naturalWidth}x${testImg1.naturalHeight}px`);
-        };
-        testImg1.onerror = (err) => {
-            console.error("❌ DEBUG [Logo 1 UNAM]: Error crítico al cargar el archivo. Posibles causas: El archivo no existe en esa ruta, tiene mal las mayúsculas/minúsculas, o el Service Worker (sw.js) bloqueó la petición.");
-        };
-
-        // Monitorear carga del Escudo FESI
-        testImg2.onload = () => {
-            console.log(`✅ DEBUG [Logo 2 FESI]: ¡Cargado con ÉXITO! Tamaño real: ${testImg2.naturalWidth}x${testImg2.naturalHeight}px`);
-        };
-        testImg2.onerror = (err) => {
-            console.error("❌ DEBUG [Logo 2 FESI]: Error crítico al cargar el archivo. Posibles causas: El archivo no existe en esa ruta, tiene mal las mayúsculas/minúsculas, o el Service Worker (sw.js) bloqueó la petición.");
-        };
-
-        const edadVal = document.getElementById('edad').value || "0";
-        const fechaVisitaRaw = document.getElementById('fechaVisita').value;
-        
-        let fechaFormateada = "Fecha no disponible";
-        let fechaProximaCita = "A indicación médica";
-        if (fechaVisitaRaw) {
-            const dateObj = new Date(fechaVisitaRaw + "T00:00:00");
-            const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-            fechaFormateada = `${dateObj.getDate()} de ${meses[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
-            
-            const proximaCitaObj = new Date(fechaVisitaRaw + "T00:00:00");
-            proximaCitaObj.setMonth(proximaCitaObj.getMonth() + 1);
-            fechaProximaCita = `${proximaCitaObj.getDate()} de ${meses[proximaCitaObj.getMonth()]} ${proximaCitaObj.getFullYear()}`;
-        }
-
-        const signosRaw = document.getElementById('receta').value;
-        const extraerDato = (regex, defaultVal = "N/A") => {
-            const match = signosRaw.match(regex);
-            return match ? match[1].trim() : defaultVal;
-        };
-
-        const peso = extraerDato(/PESO:\s*([^\s|kg]+)/i, "test6");
-        const temp = extraerDato(/TEMP:\s*([^\s|°C]+)/i, "test6");
-        const part = extraerDato(/P\.ART:\s*([^\s|]+)/i, "test6");
-        const talla = extraerDato(/TALLA:\s*([^\s|cm]+)/i, "test6");
-        const fr = extraerDato(/F\.R:\s*([^\s|]+)/i, "test6");
-        const fc = extraerDato(/F\.C:\s*([^\s|]+)/i, "test6");
-
-        const diagnosticoVal = diagnosticoRaw.replace("CIE-10:", "").replace("NOTAS:", "").trim() || "Sin observaciones específicas.";
-
-        // Generar contenedor interno usando etiquetas IMG nativas estándar
-        const printContainer = document.getElementById('print-prescription-container');
-        if (!printContainer) {
-            console.error("❌ DEBUG: Error fatal. No existe el contenedor '#print-prescription-container' en tu archivo HTML.");
-            return;
-        }
-
-        printContainer.innerHTML = `
-            <div class="rx-header">
-                <div style="width: 15%; text-align: left;">
-                    <img src="${imgUnamOriginal}" alt="UNAM" style="height: 70px; max-height: 75px; width: auto; object-fit: contain;">
-                </div>
-                <div style="width: 70%; text-align: center; font-family: 'Georgia', serif; color: #143a60;">
-                    <h2 style="margin: 0; font-size: 1.35rem; font-weight: bold; color: #111;">DR. RAUL ALBERTO VILLALOBOS HERNÁNDEZ</h2>
-                    <p style="margin: 3px 0 0 0; font-size: 0.85rem; font-weight: bold; font-style: italic;">Médico Cirujano</p>
-                    <p style="margin: 1px 0 0 0; font-size: 0.8rem; font-weight: 500; color: #333;">Universidad Nacional Autónoma de México</p>
-                    <p style="margin: 2px 0 0 0; font-size: 0.8rem; font-weight: bold; color: #000;">CED. PROF. 9678858</p>
-                </div>
-                <div style="width: 15%; text-align: right;">
-                    <img src="${imgFesiOriginal}" alt="FESI UNAM" style="height: 52px; max-height: 55px; width: auto; object-fit: contain;">
-                </div>
-            </div>
-            <div class="rx-twin-blocks">
-                <div class="rx-box-container">
-                    <div class="rx-box-title">Datos del Paciente</div>
-                    <div class="rx-box-body">
-                        <strong>PACIENTE:</strong> ${nombreVal}<br>
-                        <strong>EDAD:</strong> ${edadVal} años <span style="float: right;"><strong>FECHA:</strong> ${fechaFormateada}</span><br>
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; margin-top:5px; border-top: 1px dashed #ddd; padding-top: 4px;">
-                            <div><strong>PESO:</strong> ${peso} kg</div>
-                            <div><strong>TALLA:</strong> ${talla} cm</div>
-                            <div><strong>TEMP:</strong> ${temp} °C</div>
-                            <div><strong>F.C.:</strong> ${fc}</div>
-                            <div><strong>F.R.:</strong> ${fr}</div>
-                            <div><strong>P.A.:</strong> ${part}</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="rx-box-container">
-                    <div class="rx-box-title">Diagnóstico Médico</div>
-                    <div class="rx-box-body">${diagnosticoVal.replace(/\n/g, '<br>')}</div>
-                </div>
-            </div>
-            <div class="rx-box-container" style="margin-bottom: 10px;">
-                <div class="rx-box-title">Receta y Prescripción</div>
-                <div style="background-color: #f2f2f2; text-align:center; font-weight:bold; font-size:0.75rem; padding:3px; border-bottom:1.5px solid #000000; text-transform:uppercase;">
-                    Indicaciones Médicas
-                </div>
-                <table class="rx-prescription-table" style="width: 100%; border-collapse: collapse;">
-                    <thead>
-                        <tr>
-                            <th style="width: 100%; text-align: left; padding: 6px 10px; background: #f8fafc; border-bottom: 1px solid #ddd;">Medicamento / Dosis / Frecuencia / Duración</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td style="white-space: pre-line; padding: 10px; min-height: 80px; vertical-align: top;">${tratamientoVal}</td>
-                        </tr>
-                        <tr>
-                            <th style="width: 100%; text-align: left; padding: 6px 10px; background: #f8fafc; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd;">Indicaciones Adicionales y Recomendaciones</th>
-                        </tr>
-                        <tr>
-                            <td style="color:#333333; padding: 10px; vertical-align: top;">
-                                - Dieta equilibrada e hidratación constante.<br>
-                                - Evitar suspender el tratamiento antes del tiempo indicado.<br>
-                                - En caso de presentar efectos adversos, comunicarse de inmediato.
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <div class="rx-box-container" style="width: 40%; margin-bottom: 12px;">
-                <div class="rx-box-body" style="padding: 4px 8px; font-size: 0.8rem;">
-                    <strong>PRÓXIMA CITA:</strong> ${fechaProximaCita}
-                </div>
-            </div>
-            <div class="rx-footer-area">
-                <div class="rx-signature-line"></div>
-                <div class="rx-signature-caption">
-                    <strong>DR. RAUL ALBERTO VILLALOBOS HERNÁNDEZ</strong><br>
-                    Médico Cirujano - Cel:55-6785-6651
-                </div>
-            </div>
-            <div class="rx-slogan-bottom">
-                SGCmed - Soluciones Integrales de Salud | UNAM - Facultad de Medicina - FES Iztacala
-            </div>
-        `;
-
-        console.log("⚡ DEBUG: HTML inyectado en el nodo oculto. Disparando ventana de impresión native...");
-        
-        // Retraso controlado de 250ms para permitir que las promesas de carga del hilo de imágenes finalicen antes de congelar la ventana
-        setTimeout(() => {
-            window.print();
-        }, 250);
-    });
-}*/
-
 function configurarImpresionReceta() {
     const btnPrint = document.getElementById('btn-imprimir-receta');
     if (!btnPrint) {
@@ -747,39 +392,6 @@ function configurarImpresionReceta() {
 }
 
 // --- 7. VERIFICAR EDICIÓN GENERAL ---
-/*async function verificarEdicion() {
-    const params = new URLSearchParams(window.location.search);
-    const idUrl = params.get('id');
-    const modo = params.get('modo');
-    const vIdUrl = params.get('visitaId');
-
-    if (!idUrl) {
-        limpiarFormularioVisita();
-        return;
-    }
-    
-    const idLimpio = idUrl.toLowerCase().trim();
-    const backup = JSON.parse(localStorage.getItem('sgcmed_expedientes_backup') || '{}');
-    let data = backup[idLimpio];
-
-    if (data) {
-        renderizarDatos(data, idLimpio, modo, vIdUrl);
-    }
-
-    if (navigator.onLine) {
-        try {
-            const snap = await get(ref(db, `expedientes/${idLimpio}`));
-            if (snap.exists()) {
-                const newData = snap.val();
-                renderizarDatos(newData, idLimpio, modo, vIdUrl);
-                backup[idLimpio] = newData;
-                localStorage.setItem('sgcmed_expedientes_backup', JSON.stringify(backup));
-            }
-        } catch(e) { console.warn("Modo offline o retraso de red al sincronizar lectura."); }
-    }
-}*/
-
-// --- 7. VERIFICAR EDICIÓN GENERAL ---
 async function verificarEdicion() {
     const params = new URLSearchParams(window.location.search);
     const idUrl = params.get('id');
@@ -817,52 +429,6 @@ async function verificarEdicion() {
     }
 }
 
-/*
-function renderizarDatos(data, idLimpio, modo, vIdUrl) {
-    const hc = data.historiaClinica || {};
-    if(document.getElementById('edit-id')) document.getElementById('edit-id').value = idLimpio;
-    if(document.getElementById('nombre')) document.getElementById('nombre').value = hc.nombre || idLimpio;
-    if(document.getElementById('fi_nombre')) document.getElementById('fi_nombre').value = hc.nombre || idLimpio;
-    if(document.getElementById('edad')) document.getElementById('edad').value = hc.edad || "";
-    if(document.getElementById('fi_fecha')) document.getElementById('fi_fecha').value = hc.fechaFicha || "";
-    if(document.getElementById('fi_domicilio')) document.getElementById('fi_domicilio').value = hc.domicilio || "";
-    if(document.getElementById('fi_telefono')) document.getElementById('fi_telefono').value = hc.telefono || "";
-    if(document.getElementById('fi_nacimiento')) document.getElementById('fi_nacimiento').value = hc.fechaNacimiento || "";
-    if(document.getElementById('fi_escolaridad')) document.getElementById('fi_escolaridad').value = hc.escolaridad || "";
-    if(document.getElementById('fi_ocupacion')) document.getElementById('fi_ocupacion').value = hc.ocupacion || "";
-    if(document.getElementById('fi_estado_civil')) document.getElementById('fi_estado_civil').value = hc.estadoCivil || "Soltero";
-    if(document.getElementById('fi_religion')) document.getElementById('fi_religion').value = hc.religion || "";
-    if(document.getElementById('fi_informante')) document.getElementById('fi_informante').value = hc.informante || "";
-    if(document.getElementById('fi_parentesco')) document.getElementById('fi_parentesco').value = hc.parentesco || "";
-    
-    document.getElementById('ant_heredofamiliares').value = hc.heredofamiliares || "";
-    document.getElementById('ant_patologicos').value = hc.patologicos || "";
-    document.getElementById('ant_no_patologicos').value = hc.noPatologicos || "";
-    document.getElementById('ant_gineco').value = hc.gineco || "";
-
-    if (data.visitas) cargarHistorialVisitas(idLimpio, data.visitas);
-
-    if (modo === 'editar' && vIdUrl && data.visitas?.[vIdUrl]) {
-        const v = data.visitas[vIdUrl];
-        document.getElementById('fechaVisita').value = v.fechaVisita || "";
-        document.getElementById('tipo').value = v.tipo || "Regular";
-        document.getElementById('padecimiento').value = v.padecimiento || "";
-        document.getElementById('receta').value = v.signosVitales || ""; 
-        document.getElementById('estudios').value = v.estudios || "";
-        document.getElementById('diagnostico').value = v.diagnostico || "";
-        document.getElementById('tratamiento').value = v.tratamiento || "";
-        document.getElementById('pronostico').value = v.pronostico || "Bueno";
-        window.visitaActualId = vIdUrl;
-    } else {
-        document.getElementById('fechaVisita').valueAsDate = new Date();
-    }
-
-    const event = new Event('input');
-    ['padecimiento', 'receta', 'estudios', 'diagnostico', 'tratamiento', 'ant_heredofamiliares', 'ant_patologicos', 'ant_no_patologicos', 'ant_gineco'].forEach(id => {
-        document.getElementById(id)?.dispatchEvent(event);
-    });
-}*/
-// --- 🔑 FUNCIÓN RENDERIZAR DATOS CON ADAPTACIÓN HÍBRIDA ASÍNCRONA (RTDB + FIRESTORE) ---
 async function renderizarDatos(data, idLimpio, modo, vIdUrl) {
     const hc = data.historiaClinica || {};
     if(document.getElementById('edit-id')) document.getElementById('edit-id').value = idLimpio;
@@ -948,7 +514,6 @@ async function renderizarDatos(data, idLimpio, modo, vIdUrl) {
     });
 }
 
-// --- 🔑 FUNCIÓN PARA INTERCAMBIAR EL ORDEN DE LAS SECCIONES DINÁMICAMENTE ---
 // --- 🔑 FUNCIÓN PARA INTERCAMBIAR EL ORDEN Y EXPANDIR/COLAPSAR SECCIONES ---
 function reordenarSeccionesFormulario(modo) {
     const contenedor = document.getElementById('contenedor-secciones');
@@ -1003,9 +568,33 @@ function reordenarSeccionesFormulario(modo) {
 }
 
 // --- 8. INICIO ---
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener("DOMContentLoaded", async () => {
+    const offlineUser = JSON.parse(localStorage.getItem("offlineUser"));
+
+    if (offlineUser) {
+        console.log("✅ Sesión activa (offline):", offlineUser.email);
+        actualizarStatus(); // 🔹 usa la función centralizada
+    } else {
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                console.log("✅ Sesión activa (online):", user.email);
+                actualizarStatus();
+            } else if (navigator.onLine) {
+                console.log("🔐 No hay sesión, iniciando anónima...");
+                signInAnonymously(auth);
+                actualizarStatus();
+            } else {
+                console.warn("⚠️ Sin conexión y sin sesión offline.");
+            }
+        });
+    }
+
+    // --- 8. INICIO ---
     initUI();
     initForm();
     verificarEdicion();
     configurarImpresionReceta();
+
+    // 🔹 Inicializa conexión centralizada (listeners + setInterval)
+    inicializarConexion();
 });

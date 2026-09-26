@@ -1,24 +1,34 @@
-// sw.js - Versión 1.3.7 - SGCMED
-const CACHE_NAME = 'sgcmed-cache-v1.3.7';
+console.log("🚀 Service Worker cargado correctamente");
 
-// LISTA DE ACTIVOS (Incluyendo librerías externas de Firebase)
+const CACHE_NAME = 'sgcmed-cache-v27';
+
+// LISTA DE ACTIVOS (HTML + assets estáticos, SIN ping.txt)
 const assets = [
-  '/',
   '/index.html',
+  '/login.html',
   '/expedientes.html',
   '/parametros.html',
-  '/estilos/estilos.css',
+  '/expedientes_demo.html',
+  '/js/login.js',
+  '/js/db-local.js',
+  '/js/db-crud.js',
   '/js/config.js',
+  '/js/conexion.js',
+  '/js/app-pruebas.js',
+  '/js/busqueda.js',
   '/core-busqueda',
   '/gestion-medica',
+  '/estilos/estilos.css',
+  '/favicon.ico',
   'imagenes/logo1.png',
-  'imagenes/logo2.png',  
+  'imagenes/logo2.png',
   'https://cdn.jsdelivr.net/npm/sweetalert2@11',
-  // LIBRERÍAS DE FIREBASE (Deben estar aquí para funcionar offline)
+  // LIBRERÍAS DE FIREBASE (externas, con fallback)
   'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js',
   'https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js',
   'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js',
-  'https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js'
+  'https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js',
+  'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js'
 ];
 
 self.addEventListener('install', event => {
@@ -43,18 +53,59 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  // Solo interceptar peticiones GET (Firebase Realtime DB usa WebSockets, no chocará aquí)
   if (event.request.method !== 'GET') return;
 
+  // 🔹 Excluir ping.txt: siempre desde red
+  if (event.request.url.includes('ping.txt')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // 🔹 Manejo especial para Firebase (gstatic)
+  if (event.request.url.includes('firebasejs')) {
+    event.respondWith(
+      caches.match(event.request).then(response => {
+        if (response) {
+          console.log("📂 Firebase servido desde caché:", event.request.url);
+          return response;
+        }
+        console.log("🌐 Pidiendo Firebase:", event.request.url);
+        return fetch(event.request).catch(() => {
+          console.warn("⚠️ Firebase no disponible offline:", event.request.url);
+          // 🔹 Fallback: respuesta vacía con status 200 para evitar error fatal
+          return new Response("", { status: 200, statusText: "Offline Firebase" });
+        });
+      })
+    );
+    return;
+  }
+
+  // 🔹 Documentos HTML: red primero, fallback a login.html
+  if (event.request.destination === 'document') {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        console.warn("⚠️ No se pudo cargar documento, mostrando versión cacheada.");
+        const url = new URL(event.request.url);
+        if (event.request.url.endsWith('/index.html')) {
+          return caches.match('/index.html');
+        }
+        return caches.match(url.pathname);
+      })
+    );
+    return;
+  }
+
+  // 🔹 Recursos normales (CSS, JS, imágenes)
   event.respondWith(
     caches.match(event.request).then(response => {
-      // Si está en caché (incluyendo las librerías de Google), devolverlo
-      if (response) return response;
-
-      // Si no, intentar red
+      if (response) {
+        console.log("📂 Sirviendo desde caché:", event.request.url);
+        return response;
+      }
+      console.log("🌐 Pidiendo al servidor:", event.request.url);
       return fetch(event.request).catch(() => {
-        // Si falla todo, devolver respuesta vacía para evitar el error TypeError
-        return new Response('Offline', { status: 503, statusText: 'Offline' });
+        console.warn("⚠️ Recurso no disponible offline:", event.request.url);
+        return new Response("Offline", { status: 503, statusText: "Offline" });
       });
     })
   );

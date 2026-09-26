@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Búsqueda y Exportación SGCMED</title>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/file-saver/dist/FileSaver.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+
+  <style>
+    #lista-pacientes {
+      max-height: 250px;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      padding: 5px;
+      width: 500px;
+      list-style: none;
+    }
+    #lista-pacientes li {
+      border-bottom: 1px solid #eee;
+      padding: 6px;
+    }
+    .acciones {
+      margin-top: 5px;
+    }
+    .acciones button {
+      margin-right: 5px;
+    }
+    .ultima-visita {
+      font-size: 0.9em;
+      color: #555;
+      margin-top: 3px;
+    }
+  </style>
+
+  <script type="module">
+    import { db } from "/js/config.js"; 
+    import { ref, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    import { dbGetAll, dbPut } from "/js/db-crud.js"; 
+
+    // 🔹 Verificación real de conexión
+    async function verificarInternetReal() {
+    try {
+        const resp = await fetch('/ping.txt?cacheBust=' + Date.now(), { cache: 'no-store' });
+        return resp.ok;
+    } catch {
+        return false;
+    }
+    }
+    // 🔹 Actualizar distintivo de conexión
+    async function actualizarEstadoConexion() {
+  const conectado = await verificarInternetReal();
+  const estadoDiv = document.getElementById("estado-conexion");
+
+  if (conectado) {
+    estadoDiv.textContent = "🟢 Conectado";
+    estadoDiv.style.color = "green";
+  } else {
+    estadoDiv.textContent = "🔴 Desconectado";
+    estadoDiv.style.color = "red";
+
+    // 🔍 Verificar si hay pacientes en BD local
+    const pacientesOffline = await obtenerPacientesOffline();
+    const estadoBusqueda = document.getElementById("estado-busqueda");
+    estadoBusqueda.textContent = `👥 Pacientes en BD local: ${pacientesOffline.length}`;
+    estadoBusqueda.style.color = pacientesOffline.length > 0 ? "green" : "red";
+  }
+}
+
+    // 🔹 Sensor automático cada 5 segundos
+    setInterval(actualizarEstadoConexion, 5000);
+    // 🔍 Buscar pacientes (offline + online si hay internet real)
+    async function buscarPacientes(query) {
+    let pacientes = [];
+    let fuente = "";
+
+    if (!navigator.onLine) {
+        pacientes = await obtenerPacientesOffline(query);
+        fuente = "IndexedDB (offline)";
+    } else {
+        const snapshot = await get(ref(db, "expedientes"));
+        const data = snapshot.val() || {};
+        pacientes = Object.entries(data)
+        .filter(([nombreClave, datos]) =>
+            nombreClave.toLowerCase().includes(query.toLowerCase()) ||
+            datos.historiaClinica?.nombre?.toLowerCase().includes(query.toLowerCase())
+        )
+        .map(([nombreClave, datos]) => ({ ...datos, _nombreClave: nombreClave }));
+
+        await guardarPacientesLocal(data);
+        fuente = "Firebase (online)";
+    }
+
+    const estadoBusqueda = document.getElementById("estado-busqueda");
+    estadoBusqueda.textContent = `👥 Pacientes encontrados: ${pacientes.length} | Fuente: ${fuente}`;
+    estadoBusqueda.style.color = pacientes.length > 0 ? "green" : "red";
+
+    return pacientes;
+    }
+
+    // Formatear fecha a dd/mm/yyyy
+    function formatearFecha(fechaStr) {
+      try {
+        const f = new Date(fechaStr);
+        if (isNaN(f)) return fechaStr;
+        return f.toLocaleDateString("es-MX");
+      } catch {
+        return fechaStr;
+      }
+    }
+
+    // Mostrar resultados con última visita y botón de exportar
+    async function mostrarResultadosBusqueda() {
+    const query = document.getElementById("busqueda").value.trim();
+
+    if (query.length < 1) {
+        Swal.fire({
+        icon: "warning",
+        title: "Búsqueda inválida",
+        text: "Debes escribir al menos una letra para buscar."
+        });
+        return;
+    }
+
+    const resultados = await buscarPacientes(query);
+    const lista = document.getElementById("lista-pacientes");
+    lista.innerHTML = "";
+
+    if (resultados.length === 0) {
+        Swal.fire({
+        icon: "info",
+        title: "Sin resultados",
+        text: "No se encontraron pacientes con ese criterio."
+        });
+        return;
+    }
+
+    resultados.forEach(exp => {
+        const li = document.createElement("li");
+
+        const nombre = document.createElement("strong");
+        nombre.textContent = exp.historiaClinica?.nombre || "Paciente sin nombre";
+        li.appendChild(nombre);
+
+        // ✅ Calcular última visita usando fechaVisita
+        const visitas = exp.visitas || {};
+        const visitasArray = Object.values(visitas);
+
+        if (visitasArray.length > 0) {
+        // Ordenar por fechaVisita
+        visitasArray.sort((a, b) => new Date(a.fechaVisita) - new Date(b.fechaVisita));
+        const ultima = visitasArray[visitasArray.length - 1];
+
+        const ultimaDiv = document.createElement("div");
+        ultimaDiv.className = "ultima-visita";
+        ultimaDiv.textContent = `Última visita: ${formatearFecha(ultima.fechaVisita)}`;
+        li.appendChild(ultimaDiv);
+        }
+
+        const acciones = document.createElement("div");
+        acciones.className = "acciones";
+
+        const btnExportar = document.createElement("button");
+        btnExportar.textContent = "📤 Exportar a Excel";
+        btnExportar.onclick = () => exportarPaciente(exp);
+
+        acciones.appendChild(btnExportar);
+        li.appendChild(acciones);
+        lista.appendChild(li);
+    });
+    }
+
+    // 📤 Exportar expediente + consultas en una sola pestaña + pestaña adicional
+    async function exportarPaciente(exp) {
+    const workbook = new ExcelJS.Workbook();
+
+    // Pestaña principal: Historia Clínica + Consultas
+    const hojaPrincipal = workbook.addWorksheet("Expediente Completo");
+    hojaPrincipal.columns = [
+        { header: "Campo", key: "campo", width: 30 },
+        { header: "Valor", key: "valor", width: 60 }
+    ];
+
+    // Estilo encabezados
+    hojaPrincipal.getRow(1).eachCell(cell => {
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "CCE5FF" } };
+        cell.font = { bold: true };
+        cell.alignment = { horizontal: "center" };
+    });
+
+    // ID del expediente
+    hojaPrincipal.addRow({ campo: "Expediente ID", valor: exp.id || "N/A" });
+
+    // Historia clínica
+    const hcTitle = hojaPrincipal.addRow({ campo: "=== Historia Clínica ===", valor: "" });
+    hcTitle.font = { bold: true, color: { argb: "FF0000" } };
+
+    for (const [campo, valor] of Object.entries(exp.historiaClinica || {})) {
+        let val = valor;
+        if (campo.toLowerCase().includes("fecha")) {
+        const f = new Date(valor);
+        if (!isNaN(f)) val = f.toLocaleDateString("es-MX");
+        }
+        hojaPrincipal.addRow({ campo, valor: val });
+    }
+
+    hojaPrincipal.addRow({ campo: "", valor: "" });
+
+    // Consultas
+    const consTitle = hojaPrincipal.addRow({ campo: "=== Consultas ===", valor: "" });
+    consTitle.font = { bold: true, color: { argb: "006400" } };
+
+    const visitas = exp.visitas || {};
+    for (const vId in visitas) {
+        const v = visitas[vId];
+        hojaPrincipal.addRow({ campo: "Consulta ID", valor: vId });
+
+        // FechaVisita
+        let row = hojaPrincipal.addRow({ campo: "FechaVisita", valor: formatearFecha(v.fechaVisita) });
+        row.getCell(2).alignment = { wrapText: true };
+
+        // Diagnóstico
+        row = hojaPrincipal.addRow({ campo: "Diagnóstico", valor: v.diagnostico });
+        row.getCell(2).alignment = { wrapText: true };
+
+        // Estudios
+        hojaPrincipal.addRow({ campo: "Estudios", valor: v.estudios });
+
+        // Padecimiento
+        row = hojaPrincipal.addRow({ campo: "Padecimiento", valor: v.padecimiento });
+        row.getCell(2).alignment = { wrapText: true };
+
+        // Pronóstico
+        hojaPrincipal.addRow({ campo: "Pronóstico", valor: v.pronostico });
+
+        // Signos vitales
+        row = hojaPrincipal.addRow({ campo: "SignosVitales", valor: v.signosVitales });
+        row.getCell(2).alignment = { wrapText: true };
+
+        // Tipo
+        hojaPrincipal.addRow({ campo: "Tipo", valor: v.tipo });
+
+        // Tratamiento
+        hojaPrincipal.addRow({ campo: "Tratamiento", valor: v.tratamiento });
+
+        hojaPrincipal.addRow({ campo: "", valor: "" });
+    }
+
+    // Pestaña adicional para nueva consulta (sin Consulta ID)
+    const hojaNueva = workbook.addWorksheet("Nueva Consulta");
+    hojaNueva.columns = [
+        { header: "Campo", key: "campo", width: 30 },
+        { header: "Valor", key: "valor", width: 60 }
+    ];
+
+    hojaNueva.getRow(1).eachCell(cell => {
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD966" } };
+        cell.font = { bold: true };
+        cell.alignment = { horizontal: "center" };
+    });
+
+    hojaNueva.addRow({ campo: "FechaVisita", valor: "" });
+    let row = hojaNueva.addRow({ campo: "Diagnóstico", valor: "CIE-10:\nNOTAS:" });
+    row.getCell(2).alignment = { wrapText: true };
+    hojaNueva.addRow({ campo: "Estudios", valor: "" });
+    row = hojaNueva.addRow({ campo: "Padecimiento", valor: "Motivo:\nSíntomas:" });
+    row.getCell(2).alignment = { wrapText: true };
+    hojaNueva.addRow({ campo: "Pronóstico", valor: "Posibles valores: bueno, malo" });
+    row = hojaNueva.addRow({ campo: "SignosVitales", valor: "PESO:\nTEMP:\nP.ART:\nTALLA:\nF.R:\nF.C:" });
+    row.getCell(2).alignment = { wrapText: true };
+    hojaNueva.addRow({ campo: "Tipo", valor: "Posibles valores: regular, irregular" });
+    hojaNueva.addRow({ campo: "Tratamiento", valor: "" });
+
+    // Ajustar ancho dinámico según texto
+    [hojaPrincipal, hojaNueva].forEach(hoja => {
+        hoja.columns.forEach(col => {
+        let maxLength = 10;
+        col.eachCell({ includeEmpty: true }, cell => {
+            const len = cell.value ? cell.value.toString().length : 0;
+            if (len > maxLength) maxLength = len;
+        });
+        col.width = maxLength + 5;
+        });
+    });
+
+    // Nombre del archivo: paciente + fecha actual
+    const fechaHoy = new Date();
+    const dd = String(fechaHoy.getDate()).padStart(2, "0");
+    const mm = String(fechaHoy.getMonth() + 1).padStart(2, "0");
+    const yyyy = fechaHoy.getFullYear();
+    const nombreArchivo = `${exp.historiaClinica?.nombre || "Paciente"}_${dd}-${mm}-${yyyy}.xlsx`;
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    saveAs(new Blob([buffer]), nombreArchivo);
+
+    Swal.fire({
+        icon: "success",
+        title: "Exportación completa",
+        text: `Se exportó el expediente de ${exp.historiaClinica?.nombre} con historia clínica y consultas en una sola pestaña, más la pestaña de nueva consulta.`
+    });
+    }
+
+async function guardarPacientesLocal(pacientesObj) {
+  for (const [nombreClave, datos] of Object.entries(pacientesObj)) {
+    datos._nombreClave = nombreClave;
+    await dbPut("pacientes", datos); // usa tu helper existente
+  }
+}
+
+async function obtenerPacientesOffline(query = "") {
+  const todos = await dbGetAll("pacientes");
+  if (!query) return todos;
+  return todos.filter(p =>
+    p._nombreClave.toLowerCase().includes(query.toLowerCase()) ||
+    p.historiaClinica?.nombre?.toLowerCase().includes(query.toLowerCase())
+  );
+}
+async function sincronizarPacientes() {
+  if (navigator.onLine) {
+    try {
+      const snapshot = await get(ref(db, "expedientes"));
+      const data = snapshot.val() || {};
+      await guardarPacientesLocal(data);
+
+      const pacientes = await dbGetAll("pacientes"); // ✅ usar helper
+      const estadoBusqueda = document.getElementById("estado-busqueda");
+      estadoBusqueda.textContent = `👥 Pacientes sincronizados: ${pacientes.length} desde Firebase`;
+      estadoBusqueda.style.color = "green";
+    } catch (err) {
+      console.error("Error al sincronizar:", err);
+    }
+  } else {
+    const pacientesOffline = await dbGetAll("pacientes"); // ✅ usar helper
+    const estadoBusqueda = document.getElementById("estado-busqueda");
+    estadoBusqueda.textContent = `👥 Pacientes en BD local: ${pacientesOffline.length}`;
+    estadoBusqueda.style.color = pacientesOffline.length > 0 ? "green" : "red";
+  }
+}
+
+    window.addEventListener("DOMContentLoaded", async () => {
+    // Botón buscar
+    document.getElementById("btn-buscar").addEventListener("click", mostrarResultadosBusqueda);
+
+    // Botón nuevo expediente
+    document.getElementById("btn-nuevo-expediente").addEventListener("click", () => {
+        Swal.fire("Crear nuevo expediente desde cero");
+    });
+
+    // Botón limpiar búsqueda
+    document.getElementById("btn-limpiar").addEventListener("click", () => {
+        document.getElementById("busqueda").value = "";
+        document.getElementById("lista-pacientes").innerHTML = "";
+        document.getElementById("estado-busqueda").textContent = "";
+    });
+
+    // Botón refrescar conexión
+    document.getElementById("btn-refresh").addEventListener("click", actualizarEstadoConexion);
+    document.getElementById("btn-sincronizar").addEventListener("click", sincronizarPacientes);
+
+    // Estado de conexión inicial + sensor automático
+    actualizarEstadoConexion();
+    setInterval(actualizarEstadoConexion, 5000); // cada 5 segundos
+    //await sincronizarPacientes();
+    });
+
+  </script>
+</head>
+<body>
+  <h2>🔍 Buscar Pacientes</h2>
+
+  <!-- Estado de conexión y búsqueda -->
+  <div id="estado-conexion" style="margin:10px; font-weight:bold;"></div>
+  <div id="estado-busqueda" style="margin:10px; font-weight:bold;"></div>
+<button type="button" id="btn-sincronizar">⬇️ Sincronizar Pacientes</button>
+
+  <!-- Buscador -->
+  <input type="text" id="busqueda" placeholder="Escribe parte del nombre...">
+  <button type="button" id="btn-buscar">Buscar</button>
+  <button type="button" id="btn-limpiar">🧹 Limpiar</button>
+
+  <!-- Botón de refrescar conexión -->
+  <button type="button" id="btn-refresh">🔄 Refrescar Conexión</button>
+
+  <!-- Lista de resultados -->
+  <ul id="lista-pacientes"></ul>
+
+  <!-- Botón global -->
+  <button type="button" id="btn-nuevo-expediente">📄 Nuevo Expediente</button>
+</body>
+
+</html>

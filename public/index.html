@@ -33,11 +33,56 @@
             gap: 10px;
             margin-top: 15px;
         }
+
+        .historico-header {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+
+        .historico-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 450px;
+            overflow-y: auto;
+        }
+
+        .historico-card {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 0; /* 🔹 el scroll interno maneja el padding */
+        }
+
+        .card-scroll {
+            max-height: 180px; /* 🔹 cada tarjeta tiene scroll propio */
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .historico-card h4 {
+            margin: 0 0 8px 0;
+            font-size: 1rem;
+            color: #007bff;
+        }
+        .historico-card p {
+            margin: 4px 0;
+            font-size: 0.85rem;
+            text-align: left;
+        }
+
         @media (max-width: 768px) {
             .btn-group-search {
                 grid-template-columns: 1fr !important; /* Apila los 3 botones en una sola columna en móviles */
                 gap: 8px;
             }
+            .historico-card {
+                font-size: 0.8rem;
+            }
+            .historico-card h4 {
+                font-size: 0.9rem;
+            }       
         }
     </style>
 </head>
@@ -59,6 +104,7 @@
             🔥 Borrar Todos los Expedientes
         </button>
     </div-->
+    <div id="status"></div>
 
     <div class="action-bar">
         <button class="btn-main-action btn-add" onclick="window.location.href='expedientes.html'">
@@ -67,12 +113,18 @@
         <button class="btn-main-action btn-excel" id="btn-exportar">
             <span class="icon">📊</span> Exportar Reporte
         </button>
-        <button class="btn-main-action btn-config" onclick="window.location.href='parametros.html'" style="background: var(--secondary); color: white;">
+        <!--button class="btn-main-action btn-config" onclick="window.location.href='parametros.html'" style="background: var(--secondary); color: white;">
+            <span class="icon">⚙️</span> Parámetros del Sistema
+        </button-->
+
+        <button id="btn-parametros" class="btn-main-action btn-config" style="background: var(--secondary); color: white;">
             <span class="icon">⚙️</span> Parámetros del Sistema
         </button>
+
         <button class="btn-main-action" id="btn-logout" style="background:#dc3545;color:white;">
             🚪 Cerrar Sesión
         </button>
+        <button id="btn-diagnostico" class="btn" style="background:#6c757d;color:white;padding:10px 20px;width:auto;margin:0;">⚙️ Diagnóstico</button>
     </div>
 
     <div class="card">
@@ -124,18 +176,15 @@
 
         <div class="pagination" style="display: flex; justify-content: center; gap: 5px; margin-top: 20px;"></div>
     </div>
-
+<div id="panel-diagnostico" style="display:none; position:fixed; top:15%; right:5%; background:#fff; border:1px solid #ccc; padding:15px; width:280px; box-shadow:0 2px 8px rgba(0,0,0,0.2); z-index:999;">
+  <h4 style="margin-top:0;">Panel de Diagnóstico</h4>
+  <button id="btn-cerrar-diagnostico" style="background:#dc3545; color:white; border:none; padding:5px 10px; cursor:pointer;">✖</button>
+  <button id="btn-refrescar-panel" style="background:#007bff; color:white; border:none; padding:5px 10px; cursor:pointer;">🔄 </button>
+  <div id="estado-internet"></div>
+  <div id="estado-firebase"></div>
+  <div id="estado-indexeddb"></div>
+  <div id="estado-cola"></div>
+</div>
 <script type="module" src="/core-busqueda"></script>
-<!--script type="module" src="/js/carga-masiva.js"></script>
-<script type="module" src="/js/borrado.js"></script-->
-<!--script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js')
-        .then(reg => console.log('✅ Service Worker registrado', reg))
-        .catch(err => console.warn('❌ Fallo al registrar Service Worker', err));
-    });
-  }
-</script-->
 </body>
 </html>

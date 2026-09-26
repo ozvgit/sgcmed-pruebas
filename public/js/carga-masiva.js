@@ -55,7 +55,7 @@ async function ejecutarCargaMasivaPacientes() {
     printLog("⏳ Preparando asignación y empaquetado de 400 pacientes estructurales...", "#ffea00");
     
     const objetoActualizacionMasiva = {};
-    const totalPacientes = 400;
+    const totalPacientes = 10;
 
     for (let i = 1; i <= totalPacientes; i++) {
         // Generación de nombres combinados

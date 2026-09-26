@@ -17,6 +17,8 @@
         </button>
     </div>
 
+    <!-- 🔹 Indicador de estado -->
+    <div id="status"></div>
     <div class="card" style="margin-top: 20px;">
         <form id="form-config">
             <div class="form-grid">
@@ -56,70 +58,112 @@
     </div>
 
     <script type="module">
-
-        import { auth, functions, db } from '/js/config.js';
-        import { onAuthStateChanged, signOut} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { auth, functions } from '/js/config.js';
+        import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { httpsCallable } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js";
-        import { ref, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { inicializarConexion, actualizarStatus } from "/js/conexion.js";
+        import { dbPut, dbGet, dbGetAll, dbDelete } from "/js/db-crud.js";
 
         const form = document.getElementById('form-config');
         const btnSave = document.getElementById('btn-save-cfg');
-        onAuthStateChanged(auth, (user) => {
-            if (!user) {
-                window.location.href = "login.html";
-                return;
+
+        // 🔹 Validación híbrida de sesión
+        document.addEventListener("DOMContentLoaded", async () => {
+            const offlineUser = await dbGet("usuarios", "offlineUser");
+
+            if (offlineUser) {
+                console.log("✅ Sesión activa (offline):", offlineUser.email);
+                actualizarStatus();
+            } else {
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        console.log("✅ Sesión activa (online):", user.email);
+                        actualizarStatus();
+                    } else {
+                        window.location.href = "login.html";
+                    }
+                });
             }
         });
-        // 1. Cargar configuración actual al abrir la página
-        async function cargarConfiguracion() {
-            const administrarConfig = httpsCallable(functions, 'administrarConfiguracion');
-            try {
-                // Llamamos a la función con la acción 'obtener'
-                const resultado = await administrarConfig({ accion: 'obtener' });
-                const cfg = resultado.data; // onCall devuelve los datos en .data
 
+        inicializarConexion();
+
+        // 🔹 Cargar configuración actual
+        async function cargarConfiguracion() {
+            // 🔹 Primero intentamos leer local
+            const cfgLocal = await dbGet("configuracion", "global");
+            if (cfgLocal) {
+                document.getElementById('cfg_paginacion').value = cfgLocal.paginacion || 10;
+                document.getElementById('cfg_estilo_botones').value = cfgLocal.estiloBotones || 'completo';
+            }
+
+            if (!navigator.onLine) return;
+
+            // 🔹 Si hay conexión, actualizamos desde la nube
+            const administrarConfig = httpsCallable(functions, 'administrarConfiguracionPruebas');
+            try {
+                const resultado = await administrarConfig({ accion: 'obtener' });
+                const cfg = resultado.data;
                 if (cfg) {
                     document.getElementById('cfg_paginacion').value = cfg.paginacion || 10;
                     document.getElementById('cfg_estilo_botones').value = cfg.estiloBotones || 'completo';
+                    
+                    // Guardamos también en IndexedDB
+                    await dbPut("configuracion", {
+                        clave: "global",
+                        paginacion: cfg.paginacion,
+                        estiloBotones: cfg.estiloBotones
+                    });
                 }
             } catch (error) {
                 console.error("Error cargando config vía Function:", error);
-                // Opcional: SweetAlert de error
             }
         }
 
-        // 2. Guardar vía Cloud Function
+
+        // 🔹 Guardar configuración
         form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            btnSave.disabled = true;
-            btnSave.innerText = "⏳ Sincronizando...";
+    e.preventDefault();
+    btnSave.disabled = true;
+    btnSave.innerText = "⏳ Sincronizando...";
 
-            const administrarConfig = httpsCallable(functions, 'administrarConfiguracion');
-            
-            const nuevosDatos = {
-                paginacion: parseInt(document.getElementById('cfg_paginacion').value),
-                estiloBotones: document.getElementById('cfg_estilo_botones').value,
-                ultimaActualizacion: new Date().toISOString()
-            };
+    const administrarConfig = httpsCallable(functions, 'administrarConfiguracionPruebas');
+    const nuevosDatos = {
+        paginacion: parseInt(document.getElementById('cfg_paginacion').value),
+        estiloBotones: document.getElementById('cfg_estilo_botones').value,
+        ultimaActualizacion: new Date().toISOString()
+    };
 
-            try {
-                await administrarConfig({ accion: 'actualizar', datos: nuevosDatos });
-                Swal.fire('¡Éxito!', 'Los parámetros han sido actualizados globalmente.', 'success');
-            } catch (error) {
-                Swal.fire('Error', 'No se pudo actualizar la configuración.', 'error');
-            } finally {
-                btnSave.disabled = false;
-                btnSave.innerText = "💾 Guardar Configuración en la Nube";
-            }
+    try {
+        // Guardamos primero en IndexedDB
+        await dbPut("configuracion", {
+            clave: "global",
+            paginacion: nuevosDatos.paginacion,
+            estiloBotones: nuevosDatos.estiloBotones,
+            ultimaActualizacion: nuevosDatos.ultimaActualizacion
         });
 
+        // Si hay conexión, también actualizamos en la nube
+        if (navigator.onLine) {
+            await administrarConfig({ accion: 'actualizar', datos: nuevosDatos });
+            Swal.fire('¡Éxito!', 'Los parámetros han sido actualizados globalmente.', 'success');
+        } else {
+            Swal.fire('Modo Offline', 'Los parámetros se guardaron localmente y se sincronizarán cuando haya conexión.', 'info');
+        }
+    } catch (error) {
+        Swal.fire('Error', 'No se pudo actualizar la configuración.', 'error');
+    } finally {
+        btnSave.disabled = false;
+        btnSave.innerText = "💾 Guardar Configuración en la Nube";
+    }
+});
+
         cargarConfiguracion();
-        const btnLogout =  document.getElementById('btn-logout');
 
+        // 🔹 Logout híbrido
+        const btnLogout = document.getElementById('btn-logout');
         if (btnLogout) {
-
             btnLogout.addEventListener('click', async () => {
-
                 const respuesta = await Swal.fire({
                     title: 'Cerrar sesión',
                     text: '¿Desea salir de SGCMED?',
@@ -129,41 +173,33 @@
                     cancelButtonText: 'Cancelar'
                 });
 
-                if (!respuesta.isConfirmed) {
-                    return;
-                }
+                if (!respuesta.isConfirmed) return;
 
                 try {
+                    if (navigator.onLine) {
+                        await signOut(auth);
+                    }
 
-                    await signOut(auth);
+                    // 🔹 Limpiar usuario offline
+                    await dbDelete("usuarios", "offlineUser");
 
-                    window.location.href =
-                        'login.html';
+                    // 🔹 Limpiar todos los expedientes locales
+                    /*const backup = await dbGetAll("expedientes");
+                    if (backup && backup.length > 0) {
+                        for (const exp of backup) {
+                            await dbDelete("expedientes", exp.id);
+                        }
+                    }*/
 
+                    window.location.href = 'login.html';
                 } catch (error) {
-
                     console.error(error);
-
-                    Swal.fire(
-                        'Error',
-                        'No fue posible cerrar la sesión.',
-                        'error'
-                    );
-
+                    Swal.fire('Error','No fue posible cerrar la sesión.','error');
                 }
-
             });
-
         }
-    </script>
-    <script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js')
-        .then(reg => console.log('✅ Service Worker registrado', reg))
-        .catch(err => console.warn('❌ Fallo al registrar Service Worker', err));
-    });
-  }
-</script>
+
+     </script>
+
 </body>
 </html>

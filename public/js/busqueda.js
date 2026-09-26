@@ -1,9 +1,10 @@
 // js/busqueda.js - Versión 1.6.4 - SGCMED (Corrección Híbrida Unificada)
-// 🔑 CORRECCIÓN: Agregamos 'onValue' a las importaciones de la Realtime Database
 import { db, functions, auth } from '/js/config.js';
 import { ref, get, update, push, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js"; 
+import { dbPut, dbGet, dbGetAll, dbDelete } from "/js/db-crud.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { inicializarConexion, actualizarStatus } from "/js/conexion.js";
 
 let expedientesFiltrados = []; 
 let paginaActual = 1;
@@ -12,21 +13,24 @@ let estiloBotones = 'completo';
 
 // Sincronizar parámetros
 async function sincronizarParametros() {
-    const cfgLocal = localStorage.getItem('sgcmed_config');
+    const cfgLocal = await dbGet("configuracion", "global");
     if (cfgLocal) {
-        const cfg = JSON.parse(cfgLocal);
-        registrosPorPagina = cfg.paginacion;
-        estiloBotones = cfg.estilo;
+        registrosPorPagina = cfgLocal.paginacion;
+        estiloBotones = cfgLocal.estiloBotones;
     }
     if (!navigator.onLine) return;
 
     try {
-        const administrarConfig = httpsCallable(functions, 'administrarConfiguracion');
+        const administrarConfig = httpsCallable(functions, 'administrarConfiguracionPruebas');
         const resultado = await administrarConfig({ accion: 'obtener' });
         if (resultado.data) {
             registrosPorPagina = Number(resultado.data.paginacion) || 5;
             estiloBotones = String(resultado.data.estiloBotones).trim() || 'completo';
-            localStorage.setItem('sgcmed_config', JSON.stringify({paginacion: registrosPorPagina, estilo: estiloBotones}));
+            await dbPut("configuracion", {
+                clave: "global",
+                paginacion: registrosPorPagina,
+                estiloBotones: estiloBotones
+            });            
             renderizarTablaPaginada();
         }
     } catch (e) { console.warn("Usando config local."); }
@@ -48,7 +52,7 @@ async function filtrarExpedientes() {
         return Swal.fire('Criterios Insuficientes', 'Debe ingresar el Nombre del Paciente o un Rango de Fechas completo.', 'warning');
     }
 
-    if ((fechaInicioStr.length > 0 && fechaFinStr.length === 0) || (fechaInicioStr.length === 0 && fechaFinStr.length > 0)) {
+    if ((fechaInicioStr && !fechaFinStr) || (!fechaInicioStr && fechaFinStr)) {
         return Swal.fire('Rango Incompleto', 'Para buscar por fechas debe definir tanto el inicio (Desde) como el fin (Hasta).', 'warning');
     }
 
@@ -60,9 +64,7 @@ async function filtrarExpedientes() {
             return Swal.fire('Error de Rango', 'La fecha "Hasta" no puede ser anterior a la fecha "Desde".', 'warning');
         }
 
-        const diferenciaTiempo = dateFin.getTime() - dateInicio.getTime();
-        const diferenciaDias = diferenciaTiempo / (1000 * 3600 * 24);
-
+        const diferenciaDias = (dateFin - dateInicio) / (1000 * 3600 * 24);
         if (diferenciaDias > 365) {
             return Swal.fire('Rango Excedido', 'El período de búsqueda por rango de fechas no puede superar 1 año (365 días).', 'error');
         }
@@ -74,31 +76,89 @@ async function filtrarExpedientes() {
         if (!datos) return;
         expedientesFiltrados = [];
 
+        // ✅ Ajuste: siempre fijar hora al mediodía local
+        function parseFecha(fechaStr) {
+            if (!fechaStr) return null;
+
+            // Formato DD/MM/YYYY
+            if (fechaStr.includes('/')) {
+                const [dia, mes, anio] = fechaStr.split('/').map(Number);
+                return new Date(anio, mes - 1, dia, 12, 0, 0);
+            }
+
+            // Formato ISO YYYY-MM-DD
+            const partes = fechaStr.split("-");
+            if (partes.length === 3) {
+                const [anio, mes, dia] = partes.map(Number);
+                return new Date(anio, mes - 1, dia, 12, 0, 0);
+            }
+
+            // Otros formatos
+            return new Date(fechaStr);
+        }
+
+        const fInicio = parseFecha(fechaInicioStr);
+        const fFin = parseFecha(fechaFinStr);
+
+        console.log("📅 Rango de búsqueda:", tieneRangoFechas ? `${fInicio} → ${fFin}` : "Sin rango");
+
         Object.keys(datos).forEach(id => {
             const exp = datos[id];
             const nombre = (exp.historiaClinica?.nombre || id).toLowerCase();
-            
+
             const cumpleNombre = !tieneNombre || nombre.includes(nombreBusqueda);
-            let cumpleFechas = !tieneRangoFechas; 
+            let cumpleFechas = !tieneRangoFechas;
+            let ultimaVisita = "Sin visitas";
+            let ultimaVisitaId = null;
 
-            if (tieneRangoFechas && exp.visitas) {
-                const fInicio = new Date(fechaInicioStr + "T00:00:00");
-                const fFin = new Date(fechaFinStr + "T23:59:59");
+            if (exp.visitas) {
+                const todasVisitas = Object.entries(exp.visitas);
+                const todasFechas = todasVisitas
+                    .map(([vid, v]) => ({ id: vid, fecha: parseFecha(v.fechaVisita) }))
+                    .filter(f => f.fecha instanceof Date && !isNaN(f.fecha));
 
-                cumpleFechas = Object.keys(exp.visitas).some(vId => {
-                    const vStr = exp.visitas[vId].fechaVisita;
-                    if (!vStr) return false;
-                    const fVisita = new Date(vStr + "T00:00:00");
-                    return fVisita >= fInicio && fVisita <= fFin;
-                });
+                console.log("👤 Paciente:", nombre, "→ Todas las fechas:", todasFechas);
+
+                if (tieneRangoFechas) {
+                    const fechasFiltradas = todasFechas.filter(f => f.fecha >= fInicio && f.fecha <= fFin);
+                    console.log("✅ Fechas dentro del rango:", fechasFiltradas);
+
+                    if (fechasFiltradas.length > 0) {
+                        const ultima = fechasFiltradas.reduce((a, b) => a.fecha > b.fecha ? a : b);
+                        ultimaVisita = ultima.fecha.toLocaleDateString("es-MX");
+                        ultimaVisitaId = ultima.id;
+                        cumpleFechas = true;
+                        console.log("📌 Última visita en rango:", ultimaVisita, "ID:", ultimaVisitaId);
+                    } else {
+                        cumpleFechas = false;
+                        console.log("❌ No hay visitas en rango");
+                    }
+                } else {
+                    if (todasFechas.length > 0) {
+                        const ultima = todasFechas.reduce((a, b) => a.fecha > b.fecha ? a : b);
+                        ultimaVisita = ultima.fecha.toLocaleDateString("es-MX");
+                        ultimaVisitaId = ultima.id;
+                        console.log("📌 Última visita (sin rango):", ultimaVisita, "ID:", ultimaVisitaId);
+                    }
+                    cumpleFechas = true;
+                }
             }
 
             if (cumpleNombre && cumpleFechas) {
+                const visitasFiltradas = tieneRangoFechas
+                    ? Object.entries(exp.visitas).filter(([vid, v]) => {
+                        const f = parseFecha(v.fechaVisita);
+                        return f && f >= fInicio && f <= fFin;
+                    }).reduce((acc, [vid, v]) => { acc[vid] = v; return acc; }, {})
+                    : exp.visitas || {};
+
                 expedientesFiltrados.push({ 
                     id, 
                     nombre: exp.historiaClinica?.nombre || id, 
                     historiaClinica: exp.historiaClinica || {},
-                    visitas: exp.visitas 
+                    visitas: visitasFiltradas,
+                    ultimaVisita,
+                    ultimaVisitaId
                 });
             }
         });
@@ -108,13 +168,20 @@ async function filtrarExpedientes() {
         renderizarTablaPaginada();
     };
 
+    // 🔹 Modo offline
     if (!navigator.onLine) {
-        const backup = localStorage.getItem('sgcmed_expedientes_backup');
-        if (backup) procesarDatos(JSON.parse(backup));
-        else listaUI.innerHTML = "<tr><td colspan='3' style='text-align:center;'>Sin datos offline disponibles.</td></tr>";
+        const backup = await dbGetAll("expedientes");
+        if (backup && backup.length > 0) {
+            const datos = {};
+            backup.forEach(exp => datos[exp.id] = exp);
+            procesarDatos(datos);
+        } else {
+            listaUI.innerHTML = "<tr><td colspan='3' style='text-align:center;'>Sin datos offline disponibles.</td></tr>";
+        }
         return;
     }
 
+    // 🔹 Modo online con fallback
     try {
         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 1500));
         const firebasePromise = get(ref(db, 'expedientes'));
@@ -125,10 +192,17 @@ async function filtrarExpedientes() {
         }
     } catch (error) {
         console.log("⏱️ Firebase lento o sin red en búsqueda. Extrayendo respaldo local...");
-        const backup = localStorage.getItem('sgcmed_expedientes_backup');
-        if (backup) procesarDatos(JSON.parse(backup));
+        const backup = await dbGetAll("expedientes");
+        if (backup && backup.length > 0) {
+            const datos = {};
+            backup.forEach(exp => datos[exp.id] = exp);
+            procesarDatos(datos);
+        } else {
+            listaUI.innerHTML = "<tr><td colspan='3' style='text-align:center;'>Sin datos offline disponibles.</td></tr>";
+        }
     }
 }
+
 
 async function filtrarHistoricoFirestore() {
     const nombreBusqueda = document.getElementById('busqueda-nombre').value.toLowerCase().trim();
@@ -167,55 +241,25 @@ async function filtrarHistoricoFirestore() {
                 return;
             }
 
-            let idReal = nombreBusqueda;
-            let fechaAltaRescate = "Sin Fecha";
-            let edadRescate = "N/A";
+            // 🔹 Ordenar visitas por fecha y tomar la última
+            visitasBackend.sort((a, b) => {
+                const fechaA = a.fechaVisita ? new Date(a.fechaVisita) : new Date(0);
+                const fechaB = b.fechaVisita ? new Date(b.fechaVisita) : new Date(0);
+                return fechaA - fechaB;
+            });
+            const ultimaVisita = visitasBackend[visitasBackend.length - 1];
 
-            if (visitasBackend && visitasBackend.length > 0) {
-                idReal = visitasBackend[0].pacienteIdOriginal || visitasBackend[0].pacienteId || nombreBusqueda;
-                
-                // 🎯 PASO A: Extraemos la edad real de la consulta si existe (ej: 34), o buscamos variantes
-                let bEdad = visitasBackend[0].edad || visitasBackend[0].textEdad;
-                if (bEdad && bEdad !== "N/A" && bEdad !== "archivado") {
-                    edadRescate = bEdad;
-                } else {
-                    // Si no viene en la visita, la extraemos del input de la pantalla si está cargado
-                    edadRescate = document.getElementById('paciente-edad')?.value || "34"; // Fallback seguro
-                }
+            const idReal = ultimaVisita.pacienteIdOriginal || ultimaVisita.pacienteId || nombreBusqueda;
+            const nombreEnMinusculas = idReal.toLowerCase().replace(/_/g, ' ').trim();
+            const edadRescate = ultimaVisita.edad || ultimaVisita.textEdad || "N/A";
+            const fechaAltaRescate = ultimaVisita.fechaFicha || ultimaVisita.fechaAlta || ultimaVisita.fechaVisita || "Sin Fecha";
 
-                // 🎯 PASO B: Si el backend devolvió "Sin Fecha", extraemos el timestamp real del ID de la visita (v_1780809993201)
-                let bFecha = visitasBackend[0].fechaFicha || visitasBackend[0].fechaAlta || visitasBackend[0].fechaVisita;
-                
-                if (bFecha && bFecha !== "Sin Fecha") {
-                    fechaAltaRescate = bFecha;
-                } else {
-                    // Rompemos el ID de la visita para extraer el tiempo real cronológico de creación
-                    const tokenVisita = visitasBackend[0].visitaId || "";
-                    const timestampString = tokenVisita.replace('v_', '').trim();
-                    const timestampNum = parseInt(timestampString, 10);
-
-                    if (!isNaN(timestampNum) && timestampNum > 0) {
-                        // Convertimos los milisegundos a un formato de fecha plano DD/MM/AAAA
-                        const fechaObj = new Date(timestampNum);
-                        fechaAltaRescate = fechaObj.toLocaleDateString('es-MX', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric'
-                        });
-                    } else {
-                        fechaAltaRescate = "06/06/2023"; // Respaldo estático final basado en tu reporte
-                    }
-                }
-            }
-
+            // 🔹 Guardar solo la última visita en la tabla, pero todas en visitas
             const visitasEstructuradas = {};
             visitasBackend.forEach(v => {
                 visitasEstructuradas[v.visitaId] = { ...v };
             });
 
-            const nombreEnMinusculas = idReal.toLowerCase().replace(/_/g, ' ').trim();
-
-            // Sincronizamos el objeto exactamente igual que a un paciente activo
             expedientesFiltrados.push({
                 id: idReal.toLowerCase().trim(),
                 nombre: nombreEnMinusculas, 
@@ -224,7 +268,8 @@ async function filtrarHistoricoFirestore() {
                     fechaFicha: fechaAltaRescate, 
                     edad: edadRescate             
                 },
-                visitas: visitasEstructuradas,
+                visitas: visitasEstructuradas, // 🔹 todas las visitas para el popup
+                ultimaVisita: ultimaVisita.fechaVisita || "Sin Fecha",
                 esRegistroHistorico: true
             });
 
@@ -240,7 +285,22 @@ async function filtrarHistoricoFirestore() {
 
     } catch (error) {
         console.error("Error al invocar la consulta de histórico:", error);
-        listaUI.innerHTML = "<tr><td colspan='3' style='text-align:center;'>❌ Error de comunicación segura con el servidor.</td></tr>";
+        const backup = await dbGetAll("expedientes");
+        if (backup && backup.length > 0) {
+            expedientesFiltrados = backup.map(exp => ({
+                id: exp.id,
+                nombre: exp.historiaClinica?.nombre || exp.id,
+                historiaClinica: exp.historiaClinica || {},
+                visitas: exp.visitas || {},
+                ultimaVisita: exp.historiaClinica?.fechaFicha || "Sin Fecha",
+                esRegistroHistorico: true
+            }));
+            expedientesFiltrados.sort((a, b) => a.nombre.localeCompare(b.nombre));
+            paginaActual = 1;
+            renderizarTablaPaginada();
+        } else {
+            listaUI.innerHTML = "<tr><td colspan='3' style='text-align:center;'>❌ Error de comunicación segura con el servidor y sin respaldo local disponible.</td></tr>";
+        }
     }
 }
 
@@ -331,16 +391,20 @@ function exportarExcel() {
     document.body.removeChild(link);
 }
 
-// --- RENDEREAR TABLA PAGINADA ---
 function renderizarTablaPaginada() {
+    console.log("▶️ renderizarTablaPaginada() iniciada");
     const listaUI = document.getElementById('lista-pacientes');
-    if (!listaUI) return;
+    if (!listaUI) {
+        console.warn("⚠️ No se encontró lista-pacientes en el DOM");
+        return;
+    }
     listaUI.innerHTML = "";
     
     const inicio = (paginaActual - 1) * registrosPorPagina;
     const fin = inicio + registrosPorPagina;
     const bloquePagina = expedientesFiltrados.slice(inicio, fin);
-    
+    console.log(`📊 Mostrando expedientes del ${inicio} al ${fin}`, bloquePagina);
+
     if (bloquePagina.length === 0) {
         listaUI.innerHTML = "<tr><td colspan='3' style='text-align:center;'>No se encontraron resultados con los criterios especificados.</td></tr>";
         actualizarControlesPaginacion(0);
@@ -348,34 +412,33 @@ function renderizarTablaPaginada() {
     }
 
     bloquePagina.forEach(exp => {
-        let ultimaVisitaId = null;
-        let fechaMostrar = "Sin visitas";
-        
-        if (exp.visitas && Object.keys(exp.visitas).length > 0) {
-            const mapeoVisitas = Object.keys(exp.visitas).map(key => {
-                return { id: key, ...exp.visitas[key] };
-            });
+        console.log("🔍 Procesando expediente:", exp.id, exp.nombre);
 
-            mapeoVisitas.sort((a, b) => {
-                const fechaA = a.fechaVisita ? new Date(a.fechaVisita + "T00:00:00") : new Date(0);
-                const fechaB = b.fechaVisita ? new Date(b.fechaVisita + "T00:00:00") : new Date(0);
-                return fechaA - fechaB;
-            });
+        let ultimaVisitaId = exp.ultimaVisitaId || null;
+        let fechaMostrar = exp.ultimaVisita || "Sin visitas";
 
-            const visitaMasReciente = mapeoVisitas[mapeoVisitas.length - 1];
-            
-            ultimaVisitaId = visitaMasReciente.id;
-            fechaMostrar = visitaMasReciente.fechaVisita ? new Date(visitaMasReciente.fechaVisita + "T00:00:00").toLocaleDateString() : "Fecha no disp.";
-        }
-        
+        console.log(`🕒 Última visita de ${exp.id}:`, fechaMostrar, "ID:", ultimaVisitaId);
+
         const tr = document.createElement('tr');
         tr.style.borderBottom = "1px solid var(--border)";
         
-        const botonesHtml = estiloBotones === 'minimal' 
-            ? `<button class="btn-mini-round" style="background:#28a745;" onclick="location.href='expedientes.html?id=${encodeURIComponent(exp.id)}&modo=nueva'">➕</button>
-               <button class="btn-mini-round" style="background:#007bff;" onclick="location.href='expedientes.html?id=${encodeURIComponent(exp.id)}&modo=editar&visitaId=${ultimaVisitaId}'" ${!ultimaVisitaId ? 'disabled style="opacity:0.5;"' : ''}>✏️</button>`
-            : `<button class="btn-action" style="background:#28a745; color:white; border:none; padding:5px 10px; border-radius:4px; font-weight:600; cursor:pointer;" onclick="location.href='expedientes.html?id=${encodeURIComponent(exp.id)}&modo=nueva'">➕ NUEVA</button>
-               <button class="btn-action edit" style="background:#007bff; color:white; border:none; padding:5px 10px; border-radius:4px; font-weight:600; cursor:pointer; margin-left:5px;" onclick="location.href='expedientes.html?id=${encodeURIComponent(exp.id)}&modo=editar&visitaId=${ultimaVisitaId}'" ${!ultimaVisitaId ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>✏️ EDITAR</button>`;
+        let botonesHtml = "";
+
+        if (exp.esRegistroHistorico) {
+            // 🔹 Solo botón Ver para históricos
+            botonesHtml = `<button class="btn-action" style="background:#6c757d; color:white; border:none; padding:5px 10px; border-radius:4px; font-weight:600; cursor:pointer;" onclick="verHistoricoPaciente('${exp.id}')">👁️ VER</button>`;
+        } else {
+            const urlNueva = `expedientes.html?id=${encodeURIComponent(exp.id)}&modo=nueva`;
+            const urlEditar = `expedientes.html?id=${encodeURIComponent(exp.id)}&modo=editar&visitaId=${ultimaVisitaId}`;
+            console.log(`🔗 URL Nueva: ${urlNueva}`);
+            console.log(`🔗 URL Editar: ${urlEditar}`);
+
+            botonesHtml = estiloBotones === 'minimal' 
+                ? `<button class="btn-mini-round" style="background:#28a745;" onclick="location.href='${urlNueva}'">➕</button>
+                   <button class="btn-mini-round" style="background:#007bff;" onclick="location.href='${urlEditar}'" ${!ultimaVisitaId ? 'disabled style="opacity:0.5;"' : ''}>✏️</button>`
+                : `<button class="btn-action" style="background:#28a745; color:white; border:none; padding:5px 10px; border-radius:4px; font-weight:600; cursor:pointer;" onclick="location.href='${urlNueva}'">➕ NUEVA</button>
+                   <button class="btn-action edit" style="background:#007bff; color:white; border:none; padding:5px 10px; border-radius:4px; font-weight:600; cursor:pointer; margin-left:5px;" onclick="location.href='${urlEditar}'" ${!ultimaVisitaId ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>✏️ EDITAR</button>`;
+        }
         
         tr.innerHTML = `
             <td style="padding:15px;"><strong>${exp.nombre}</strong></td>
@@ -384,8 +447,11 @@ function renderizarTablaPaginada() {
         `;
         listaUI.appendChild(tr);
     });
+
     actualizarControlesPaginacion(expedientesFiltrados.length);
+    console.log("🏁 renderizarTablaPaginada() terminada");
 }
+
 
 // --- CONTROLES DE PAGINACIÓN ADAPTABLE CON ELIPSIS ---
 function actualizarControlesPaginacion(totalRegistros) {
@@ -445,40 +511,1130 @@ function actualizarControlesPaginacion(totalRegistros) {
     contenedor.appendChild(btnSig);
 }
 
-// INICIALIZACIÓN
-document.addEventListener('DOMContentLoaded', async () => {
-    onAuthStateChanged(auth, async (user) => {
-        if (user) {
-            onValue(ref(db, 'expedientes'), (snapshot) => {
-                if (snapshot.exists()) {
-                    localStorage.setItem('sgcmed_expedientes_backup', JSON.stringify(snapshot.val()));
-                    console.log("💾 Respaldo sincronizado.");
-                }
-            });
-            await sincronizarParametros();
-        } else if (navigator.onLine) {
-            window.location.href = "login.html";
-        }
+
+function verHistoricoPaciente(pacienteId) {
+    const paciente = expedientesFiltrados.find(exp => exp.id === pacienteId);
+    if (!paciente || !paciente.visitas) {
+        return Swal.fire('Sin datos', 'No se encontraron visitas históricas para este paciente.', 'info');
+    }
+
+    // 🔹 Encabezado dinámico (solo si hay edad/fechaFicha)
+    let encabezado = `<h3 style="margin:0; color:#2c3e50;">${paciente.nombre}</h3>`;
+    /*
+    if (paciente.historiaClinica?.edad || paciente.historiaClinica?.fechaFicha) {
+        encabezado += `<p style="margin:4px 0; font-size:14px; color:#555;">`;
+        if (paciente.historiaClinica?.edad) encabezado += `Edad: ${paciente.historiaClinica.edad}<br>`;
+        if (paciente.historiaClinica?.fechaFicha) encabezado += `Fecha de ficha: ${paciente.historiaClinica.fechaFicha}`;
+        encabezado += `</p>`;
+    }*/
+
+    let contenido = `
+        <div class="historico-header">${encabezado}</div>
+        <div class="historico-cards">
+    `;
+
+    // 🔹 Cada visita como tarjeta con scroll interno, usando Object.entries para conservar el ID
+    Object.entries(paciente.visitas).forEach(([id, v]) => {
+        contenido += `
+            <div class="historico-card">
+                <div class="card-scroll">
+                    <h4>Visita del ${v.fechaVisita || "Sin Fecha"}</h4>
+                    <p><strong>ID de visita:</strong> ${id}</p>
+                    <p><strong>Diagnóstico:</strong> ${v.diagnostico || "N/A"}</p>
+                    <p><strong>Padecimiento:</strong> ${v.padecimiento || "N/A"}</p>
+                    <p><strong>Pronóstico:</strong> ${v.pronostico || "N/A"}</p>
+                    <p><strong>Tratamiento:</strong> ${v.tratamiento || "N/A"}</p>
+                    <p><strong>Signos Vitales:</strong> ${v.signosVitales || "N/A"}</p>
+                </div>
+            </div>
+        `;
     });
 
+    contenido += "</div>";
+
+    Swal.fire({
+        title: `Histórico de ${paciente.nombre}`,
+        html: contenido,
+        width: '95%',
+        confirmButtonText: "Cerrar",
+        customClass: {
+            popup: 'popup-historico'
+        }
+    });
+}
+
+window.verHistoricoPaciente = verHistoricoPaciente;
+
+// 🔹 Verificación real de conexión a Internet
+async function verificarInternetReal() {
+  try {
+    const resp = await fetch('/ping.txt', { cache: 'no-store' });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+// 🔹 Renderizado del panel de diagnóstico
+/*async function renderizarPanelDiagnostico() {
+  try {
+
+    // ==========================================
+    // 1. INTERNET REAL
+    // ==========================================
+    const internetOk = await verificarInternetReal();
+    const internet = internetOk
+      ? "🟢 Online"
+      : "🔴 Offline";
+
+    // ==========================================
+    // 2. FIREBASE
+    // ==========================================
+    let firebase = "🔴 Sin conexión";
+
+    if (internetOk) {
+      try {
+
+        const snap = await get(ref(db, "ping"));
+
+        if (snap.exists() && snap.val() === "ok") {
+          firebase = "🟢 Conectado";
+        } else {
+          firebase = "🟡 Error (ping inválido)";
+        }
+
+      } catch (e) {
+
+        firebase = `🟡 Error (${e.code || e.message})`;
+
+      }
+    }
+
+    // ==========================================
+    // 3. INDEXEDDB + COLA
+    // ==========================================
+    let indexeddb = "🟢 Disponible";
+
+    let totalExpedientes = 0;
+    let expedientesSincronizados = 0;
+    let expedientesPendientes = 0;
+    let pendientes = 0;
+
+    try {
+
+      const expedientes =
+        await dbGetAll("expedientes") || [];
+
+      const cola =
+        await dbGetAll("cola_sincronizacion") || [];
+
+      totalExpedientes = expedientes.length;
+      pendientes = cola.length;
+
+      // IDs únicos de expedientes realmente pendientes
+      const idsPendientes = new Set(
+        cola
+          .map(item => item.datos?.id)
+          .filter(Boolean)
+      );
+
+      expedientesPendientes = expedientes.filter(
+        exp => idsPendientes.has(exp.id)
+      ).length;
+
+      expedientesSincronizados =
+        totalExpedientes - expedientesPendientes;
+
+    } catch (error) {
+
+      console.error(
+        "❌ Error leyendo IndexedDB / cola:",
+        error
+      );
+
+      indexeddb = "🔴 Error";
+      pendientes = "?";
+    }
+
+    // ==========================================
+    // 4. ACTUALIZAR PANEL
+    // ==========================================
+
+    const estadoInternet =
+      document.getElementById("estado-internet");
+
+    const estadoFirebase =
+      document.getElementById("estado-firebase");
+
+    const estadoIndexedDB =
+      document.getElementById("estado-indexeddb");
+
+    const estadoCola =
+      document.getElementById("estado-cola");
+
+    if (estadoInternet) {
+      estadoInternet.innerText =
+        `Internet: ${internet}`;
+    }
+
+    if (estadoFirebase) {
+      estadoFirebase.innerText =
+        `Firebase: ${firebase}`;
+    }
+
+    if (estadoIndexedDB) {
+      estadoIndexedDB.innerText =
+        `IndexedDB: ${indexeddb} | Total: ${totalExpedientes} | Sincronizados: ${expedientesSincronizados} | Pendientes: ${expedientesPendientes}`;
+    }
+
+    if (estadoCola) {
+      estadoCola.innerText =
+        `Cola pendientes: ${pendientes}`;
+    }
+
+    console.log(
+      "📊 Estado de sincronización:",
+      {
+        totalExpedientes,
+        expedientesSincronizados,
+        expedientesPendientes,
+        operacionesPendientes: pendientes
+      }
+    );
+
+  } catch (e) {
+
+    console.warn(
+      "⚠️ Error en renderizarPanelDiagnostico:",
+      e
+    );
+
+    const estadoInternet =
+      document.getElementById("estado-internet");
+
+    const estadoFirebase =
+      document.getElementById("estado-firebase");
+
+    if (estadoInternet) {
+      estadoInternet.innerText =
+        "Internet: 🔴 Offline";
+    }
+
+    if (estadoFirebase) {
+      estadoFirebase.innerText =
+        "Firebase: 🔴 Sin conexión";
+    }
+  }
+}*/
+
+async function renderizarPanelDiagnostico() {
+  try {
+
+    // =====================================================
+    // 1. INTERNET REAL
+    // =====================================================
+
+    const internetOk =
+      await verificarInternetReal();
+
+    const internet =
+      internetOk
+        ? "🟢 Online"
+        : "🔴 Offline";
+
+
+    // =====================================================
+    // 2. FIREBASE
+    // =====================================================
+
+    let firebase =
+      "🔴 Sin conexión";
+
+
+    if (internetOk) {
+
+      try {
+
+        const snap =
+          await get(
+            ref(db, "ping")
+          );
+
+
+        if (
+          snap.exists() &&
+          snap.val() === "ok"
+        ) {
+
+          firebase =
+            "🟢 Conectado";
+
+        } else {
+
+          firebase =
+            "🟡 Error (ping inválido)";
+
+        }
+
+
+      } catch (e) {
+
+        firebase =
+          `🟡 Error (${e.code || e.message})`;
+
+      }
+
+    }
+
+
+    // =====================================================
+    // 3. VARIABLES DE INDEXEDDB
+    // =====================================================
+
+    let indexeddb =
+      "🟢 Disponible";
+
+
+    // Expedientes
+    let totalExpedientes = 0;
+    let expedientesSincronizados = 0;
+    let expedientesNuevosPendientes = 0;
+
+
+    // Operaciones pendientes
+    let nuevosExpedientes = 0;
+    let nuevasConsultas = 0;
+    let expedientesModificados = 0;
+    let consultasModificadas = 0;
+    let operacionesSinClasificar = 0;
+
+    let totalOperacionesPendientes = 0;
+
+
+    // =====================================================
+    // 4. LEER INDEXEDDB Y COLA
+    // =====================================================
+
+    try {
+
+      const expedientes =
+        await dbGetAll("expedientes") || [];
+
+
+      const cola =
+        await dbGetAll(
+          "cola_sincronizacion"
+        ) || [];
+
+
+      totalExpedientes =
+        expedientes.length;
+
+
+      totalOperacionesPendientes =
+        cola.length;
+
+
+      // ===================================================
+      // 5. CLASIFICAR OPERACIONES DE LA COLA
+      // ===================================================
+
+      nuevosExpedientes =
+        cola.filter(
+          item =>
+            item.tipoOperacion ===
+            "nuevo_expediente"
+        ).length;
+
+
+      nuevasConsultas =
+        cola.filter(
+          item =>
+            item.tipoOperacion ===
+            "nueva_consulta"
+        ).length;
+
+
+      expedientesModificados =
+        cola.filter(
+          item =>
+            item.tipoOperacion ===
+            "actualizar_expediente"
+        ).length;
+
+
+      consultasModificadas =
+        cola.filter(
+          item =>
+            item.tipoOperacion ===
+            "actualizar_consulta"
+        ).length;
+
+
+      // ===================================================
+      // 6. OPERACIONES ANTIGUAS / SIN CLASIFICAR
+      // ===================================================
+
+      operacionesSinClasificar =
+        cola.filter(
+          item =>
+            !item.tipoOperacion
+        ).length;
+
+
+      // ===================================================
+      // 7. IDENTIFICAR EXPEDIENTES NUEVOS ÚNICOS
+      // ===================================================
+      //
+      // Si existen varias operaciones correspondientes al
+      // mismo expediente nuevo, el expediente debe contar
+      // solamente una vez.
+      //
+
+      const idsExpedientesNuevos =
+        new Set(
+
+          cola
+
+            .filter(
+              item =>
+                item.tipoOperacion ===
+                "nuevo_expediente"
+            )
+
+            .map(
+              item =>
+                item.datos?.id
+            )
+
+            .filter(Boolean)
+
+        );
+
+
+      expedientesNuevosPendientes =
+        idsExpedientesNuevos.size;
+
+
+      // ===================================================
+      // 8. EXPEDIENTES SINCRONIZADOS
+      // ===================================================
+      //
+      // SOLAMENTE "nuevo_expediente" disminuye el contador.
+      //
+      // nueva_consulta        -> NO disminuye
+      // actualizar_consulta   -> NO disminuye
+      // actualizar_expediente -> NO disminuye
+      //
+
+      expedientesSincronizados =
+        totalExpedientes -
+        expedientesNuevosPendientes;
+
+
+    } catch (error) {
+
+      console.error(
+        "❌ Error leyendo IndexedDB / cola:",
+        error
+      );
+
+
+      indexeddb =
+        "🔴 Error";
+
+    }
+
+
+    // =====================================================
+    // 9. OBTENER ELEMENTOS DEL PANEL
+    // =====================================================
+
+    const estadoInternet =
+      document.getElementById(
+        "estado-internet"
+      );
+
+
+    const estadoFirebase =
+      document.getElementById(
+        "estado-firebase"
+      );
+
+
+    const estadoIndexedDB =
+      document.getElementById(
+        "estado-indexeddb"
+      );
+
+
+    const estadoCola =
+      document.getElementById(
+        "estado-cola"
+      );
+
+
+    // =====================================================
+    // 10. INTERNET
+    // =====================================================
+
+    if (estadoInternet) {
+
+      estadoInternet.innerText =
+        `Internet: ${internet}`;
+
+    }
+
+
+    // =====================================================
+    // 11. FIREBASE
+    // =====================================================
+
+    if (estadoFirebase) {
+
+      estadoFirebase.innerText =
+        `Firebase: ${firebase}`;
+
+    }
+
+
+    // =====================================================
+    // 12. EXPEDIENTES
+    // =====================================================
+
+    if (estadoIndexedDB) {
+
+      estadoIndexedDB.innerText =
+        `IndexedDB: ${indexeddb} | Total expedientes: ${totalExpedientes} | Sincronizados: ${expedientesSincronizados} | Nuevos pendientes: ${expedientesNuevosPendientes}`;
+
+    }
+
+
+    // =====================================================
+    // 13. OPERACIONES PENDIENTES
+    // =====================================================
+
+    if (estadoCola) {
+
+      estadoCola.innerText =
+        `Sincronización pendiente | 🆕 Expedientes nuevos: ${nuevosExpedientes} | ➕ Consultas nuevas: ${nuevasConsultas} | 📝 Expedientes modificados: ${expedientesModificados} | ✏️ Consultas modificadas: ${consultasModificadas} | ⚠️ Sin clasificar: ${operacionesSinClasificar} | Total operaciones: ${totalOperacionesPendientes}`;
+
+    }
+
+
+    // =====================================================
+    // 14. LOG DE DIAGNÓSTICO
+    // =====================================================
+
+    console.log(
+      "📊 Estado de sincronización:",
+      {
+        totalExpedientes,
+        expedientesSincronizados,
+        expedientesNuevosPendientes,
+        nuevosExpedientes,
+        nuevasConsultas,
+        expedientesModificados,
+        consultasModificadas,
+        operacionesSinClasificar,
+        totalOperacionesPendientes
+      }
+    );
+
+
+  } catch (error) {
+
+    console.warn(
+      "⚠️ Error en renderizarPanelDiagnostico:",
+      error
+    );
+
+
+    // =====================================================
+    // 15. FALLBACK
+    // =====================================================
+
+    const estadoInternet =
+      document.getElementById(
+        "estado-internet"
+      );
+
+
+    const estadoFirebase =
+      document.getElementById(
+        "estado-firebase"
+      );
+
+
+    if (estadoInternet) {
+
+      estadoInternet.innerText =
+        "Internet: 🔴 Offline";
+
+    }
+
+
+    if (estadoFirebase) {
+
+      estadoFirebase.innerText =
+        "Firebase: 🔴 Sin conexión";
+
+    }
+
+  }
+}
+
+function mostrarEstadoTemporal() {
+  document.getElementById('estado-internet').innerText = "Internet: ⏳ Verificando...";
+  document.getElementById('estado-firebase').innerText = "Firebase: ⏳ Verificando...";
+  document.getElementById('estado-indexeddb').innerText = "IndexedDB: ⏳ Verificando...";
+  document.getElementById('estado-cola').innerText = "Cola pendientes: ⏳ ...";
+}
+
+window.gestionarBotonParametros = async function() {
+    const btnParametros = document.getElementById('btn-parametros');
+    if (!btnParametros) return;
+
+    const statusDiv = document.getElementById("status");
+    // Verificamos si el texto o la clase indican que estamos en línea
+    const conectado = statusDiv && (statusDiv.classList.contains("online") || statusDiv.textContent.includes("Conectado"));
+
+    if (conectado) {
+        btnParametros.disabled = false;
+        btnParametros.style.opacity = "1";
+        btnParametros.style.pointerEvents = "auto";
+        console.log("🟢 Botón Parámetros habilitado por estado online.");
+    } else {
+        btnParametros.disabled = true;
+        btnParametros.style.opacity = "0.5";
+        btnParametros.style.pointerEvents = "none";
+        console.log("🔴 Botón Parámetros deshabilitado por estado offline.");
+    }
+}
+
+async function procesarColaSincronizacion() {
+
+  const internetReal = await verificarInternetReal();
+
+  if (!internetReal) {
+
+    console.log(
+      "📴 Sin conexión real, no se procesa la cola."
+    );
+
+    return;
+  }
+
+  const pendientes =
+    await dbGetAll("cola_sincronizacion");
+
+  if (!pendientes || pendientes.length === 0) {
+
+    console.log(
+      "📭 Cola vacía, nada que sincronizar."
+    );
+
+    await renderizarPanelDiagnostico();
+
+    return;
+  }
+
+  console.log(
+    `🔄 Sincronizando ${pendientes.length} elementos pendientes...`
+  );
+
+  for (const item of pendientes) {
+
+    try {
+
+      if (item.accion !== "guardar") {
+        continue;
+      }
+
+      const guardarExpediente =
+        httpsCallable(
+          functions,
+          "administrarExpedientePruebas"
+        );
+
+      // ==========================================
+      // ENVIAR A FIREBASE
+      // ==========================================
+      await guardarExpediente({
+        accion: "guardar",
+        datos: item.datos
+      });
+
+      // ==========================================
+      // MARCAR EXPEDIENTE LOCAL
+      // ==========================================
+      const expedienteLocal =
+        await dbGet(
+          "expedientes",
+          item.datos.id
+        );
+
+      if (expedienteLocal) {
+
+        expedienteLocal.sincronizado = true;
+        expedienteLocal.ultimaSincronizacion =
+          Date.now();
+
+        await dbPut(
+          "expedientes",
+          expedienteLocal
+        );
+      }
+
+      // ==========================================
+      // ELIMINAR DE COLA SOLAMENTE DESPUÉS
+      // DE QUE FIREBASE RESPONDIÓ CORRECTAMENTE
+      // ==========================================
+      await dbDelete(
+        "cola_sincronizacion",
+        item.id
+      );
+
+      console.log(
+        `✅ Sincronizado y eliminado de cola: ${item.id}`
+      );
+
+    } catch (error) {
+
+      console.error(
+        `❌ Error sincronizando ${item.id}:`,
+        error
+      );
+
+      break;
+    }
+  }
+
+  await renderizarPanelDiagnostico();
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    const offlineUser = await dbGet("usuarios", "offlineUser");
+    console.log("🔍 offlineUser leído de IndexedDB:", offlineUser);
+
+    if (offlineUser) {
+        // ✅ Sesión offline activa
+        console.log("✅ Sesión activa (offline):", offlineUser.email);
+
+        const backup = await dbGetAll("expedientes");
+        if (backup && backup.length > 0) {
+            console.log("📂 Usando respaldo local de expedientes.");
+        } else {
+            console.log("⚠️ No hay respaldo local disponible.");
+        }
+        actualizarStatus();
+    } else {
+        // 🔹 Solo si no hay offlineUser, escuchamos Firebase
+        /*onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                console.log("✅ Sesión activa (online):", user.email);
+                onValue(ref(db, 'expedientes'), async (snapshot) => {
+                    if (snapshot.exists()) {
+                        const datos = snapshot.val();
+                        // Guardar cada expediente en IndexedDB
+                        for (const id in datos) {
+                            await dbPut("expedientes", { id, ...datos[id] });
+                        }
+                        console.log("💾 Respaldo sincronizado en IndexedDB.");
+                    }
+                });
+                await sincronizarParametros();
+                actualizarStatus();
+            } else {
+                window.location.href = "login.html";
+            }
+        });*/
+
+        onAuthStateChanged(auth, async (user) => {
+
+            if (user) {
+
+                console.log("✅ Sesión activa (online):", user.email);
+
+                // =====================================================
+                // SINCRONIZACIÓN FIREBASE → INDEXEDDB
+                // =====================================================
+                onValue(
+                    ref(db, "expedientes"),
+                    async (snapshot) => {
+
+                        try {
+
+                            console.log(
+                                "🔄 Reconciliando Firebase con IndexedDB..."
+                            );
+
+                            // =================================================
+                            // 1. OBTENER ESTADO ACTUAL DE FIREBASE
+                            // =================================================
+                            //
+                            // IMPORTANTE:
+                            // Si Firebase no tiene expedientes, usamos {}
+                            // para poder detectar que los expedientes locales
+                            // fueron eliminados de Firebase.
+                            //
+                            const datosFirebase = snapshot.exists()
+                                ? snapshot.val()
+                                : {};
+
+
+                            // =================================================
+                            // 2. OBTENER ESTADO ACTUAL DE INDEXEDDB
+                            // =================================================
+
+                            const expedientesLocales =
+                                await dbGetAll("expedientes") || [];
+
+                            const cola =
+                                await dbGetAll("cola_sincronizacion") || [];
+
+
+                            // =================================================
+                            // 3. IDENTIFICAR EXPEDIENTES PENDIENTES
+                            // =================================================
+                            //
+                            // Si un expediente está en la cola significa que
+                            // todavía puede estar esperando sincronización.
+                            //
+                            // Estos expedientes NO deben eliminarse aunque aún
+                            // no existan en Firebase.
+                            //
+                            const idsPendientes = new Set(
+                                cola
+                                    .map(item => item.datos?.id)
+                                    .filter(Boolean)
+                            );
+
+
+                            console.log(
+                                "☁️ Expedientes en Firebase:",
+                                Object.keys(datosFirebase).length
+                            );
+
+                            console.log(
+                                "📦 Expedientes en IndexedDB:",
+                                expedientesLocales.length
+                            );
+
+                            console.log(
+                                "⏳ Expedientes protegidos por cola:",
+                                [...idsPendientes]
+                            );
+
+
+                            // =================================================
+                            // 4. INSERTAR / ACTUALIZAR DESDE FIREBASE
+                            // =================================================
+
+                            for (const id in datosFirebase) {
+
+                                // Recuperamos primero la versión local
+                                // para conservar metadatos propios de IndexedDB.
+                                const expedienteLocal =
+                                    await dbGet(
+                                        "expedientes",
+                                        id
+                                    );
+
+
+                                await dbPut(
+                                    "expedientes",
+                                    {
+
+                                        // -------------------------------------
+                                        // Conservar metadatos locales existentes
+                                        // -------------------------------------
+                                        //
+                                        // Ejemplo:
+                                        // sincronizado
+                                        // ultimaSincronizacion
+                                        //
+                                        ...(expedienteLocal || {}),
+
+
+                                        // -------------------------------------
+                                        // ID obligatorio para IndexedDB
+                                        // -------------------------------------
+                                        id,
+
+
+                                        // -------------------------------------
+                                        // Firebase manda sobre datos clínicos
+                                        // -------------------------------------
+                                        ...datosFirebase[id]
+
+                                    }
+                                );
+
+                            }
+
+
+                            // =================================================
+                            // 5. RECONCILIAR ELIMINACIONES
+                            // =================================================
+                            //
+                            // Ahora revisamos cada expediente existente
+                            // localmente.
+                            //
+                            // Si dejó de existir en Firebase y NO está
+                            // pendiente de sincronización, se elimina localmente.
+                            //
+
+                            for (const expedienteLocal of expedientesLocales) {
+
+                                const id = expedienteLocal.id;
+
+
+                                // ---------------------------------------------
+                                // ¿EXISTE ACTUALMENTE EN FIREBASE?
+                                // ---------------------------------------------
+                                const existeEnFirebase =
+                                    Object.prototype.hasOwnProperty.call(
+                                        datosFirebase,
+                                        id
+                                    );
+
+
+                                // ---------------------------------------------
+                                // ¿ESTÁ PROTEGIDO POR LA COLA?
+                                // ---------------------------------------------
+                                const tienePendientes =
+                                    idsPendientes.has(id);
+
+
+                                // =================================================
+                                // CASO A:
+                                // EL EXPEDIENTE SIGUE EXISTIENDO EN FIREBASE
+                                // =================================================
+                                if (existeEnFirebase) {
+
+                                    continue;
+
+                                }
+
+
+                                // =================================================
+                                // CASO B:
+                                // NO EXISTE EN FIREBASE,
+                                // PERO ESTÁ PENDIENTE DE SINCRONIZACIÓN
+                                // =================================================
+                                //
+                                // Este puede ser un expediente creado offline.
+                                //
+                                // NO BORRAR.
+                                //
+                                if (tienePendientes) {
+
+                                    console.log(
+                                        `🛡️ Conservando expediente pendiente: ${id}`
+                                    );
+
+                                    continue;
+
+                                }
+
+
+                                // =================================================
+                                // CASO C:
+                                // NO EXISTE EN FIREBASE
+                                // Y TAMPOCO ESTÁ PENDIENTE
+                                // =================================================
+                                //
+                                // Significa que Firebase ya no lo tiene y no
+                                // existe ninguna operación local que justifique
+                                // conservarlo.
+                                //
+                                console.log(
+                                    `🗑️ Eliminando expediente local inexistente en Firebase: ${id}`
+                                );
+
+
+                                await dbDelete(
+                                    "expedientes",
+                                    id
+                                );
+
+                            }
+
+
+                            // =================================================
+                            // 6. RECONCILIACIÓN TERMINADA
+                            // =================================================
+
+                            console.log(
+                                "✅ Firebase e IndexedDB reconciliados."
+                            );
+
+
+                            // =================================================
+                            // 7. ACTUALIZAR PANEL DE DIAGNÓSTICO
+                            // =================================================
+
+                            await renderizarPanelDiagnostico();
+
+
+                        } catch (error) {
+
+                            console.error(
+                                "❌ Error reconciliando Firebase con IndexedDB:",
+                                error
+                            );
+
+                        }
+
+                    }
+                );
+
+
+                // =====================================================
+                // SINCRONIZAR PARÁMETROS
+                // =====================================================
+
+                await sincronizarParametros();
+
+
+                // =====================================================
+                // ACTUALIZAR INDICADOR DE CONEXIÓN
+                // =====================================================
+
+                actualizarStatus();
+
+
+            } else {
+
+                // =====================================================
+                // NO EXISTE SESIÓN ACTIVA
+                // =====================================================
+
+                window.location.href = "login.html";
+
+            }
+
+        });
+
+
+    }
+
+    inicializarConexion();
+
+    await procesarColaSincronizacion();
+
+    // 🔹 Forzar evaluación de parámetros tras la carga inicial y la cola
+    await gestionarBotonParametros();
+
+    // Escuchar cuando el navegador recupera la conexión en caliente
+    // ==========================================
+    // RECUPERACIÓN DE CONEXIÓN
+    // ==========================================
+    window.addEventListener("online", async () => {
+
+    console.log(
+        "🌐 Navegador Online. Verificando conexión real..."
+    );
+
+    mostrarEstadoTemporal();
+
+    try {
+
+        const internetReal =
+        await verificarInternetReal();
+
+        if (!internetReal) {
+
+        console.warn(
+            "⚠️ Navegador Online, pero todavía no existe Internet real."
+        );
+
+        await renderizarPanelDiagnostico();
+        await gestionarBotonParametros();
+
+        return;
+        }
+
+        console.log(
+        "✅ Internet real confirmado. Procesando cola..."
+        );
+
+        // Primero procesa pendientes
+        await procesarColaSincronizacion();
+
+        // Después actualiza panel
+        await renderizarPanelDiagnostico();
+
+        // Reevaluar botón parámetros
+        await gestionarBotonParametros();
+
+        console.log(
+        "✅ Recuperación de conexión terminada."
+        );
+
+    } catch (error) {
+
+        console.error(
+        "❌ Error recuperando conexión:",
+        error
+        );
+
+        await renderizarPanelDiagnostico();
+        await gestionarBotonParametros();
+    }
+
+    });
+
+
+    // ==========================================
+    // PÉRDIDA DE CONEXIÓN
+    // ==========================================
+    window.addEventListener("offline", async () => {
+
+    console.log(
+        "📴 Conexión perdida."
+    );
+
+    await renderizarPanelDiagnostico();
+    await gestionarBotonParametros();
+
+    });
+
+    window.addEventListener('pageshow', async (event) => {
+        if (event.persisted || (performance.navigation && performance.navigation.type === 2)) {
+            console.log("🔄 Página restaurada desde caché. Forzando reevaluación...");
+        }
+        
+        // 1. Forzar verificación inmediata de red si está disponible
+        if (typeof actualizarStatus === 'function') {
+            await actualizarStatus();
+        }
+        
+        // 2. Dar un pequeño respiro para que termine el fetch/ping y reevaluar el botón
+        setTimeout(async () => {
+            if (typeof window.gestionarBotonParametros === 'function') {
+                await window.gestionarBotonParametros();
+            }
+        }, 1000);
+    });
+
+    // 🔹 Botones
     const btnBuscar = document.getElementById('btn-buscar');
-    if(btnBuscar) btnBuscar.addEventListener('click', filtrarExpedientes);
+    if (btnBuscar) btnBuscar.addEventListener('click', filtrarExpedientes);
 
     const btnLimpiar = document.getElementById('btn-limpiar');
-    if(btnLimpiar) btnLimpiar.addEventListener('click', limpiarCriterios);
+    if (btnLimpiar) btnLimpiar.addEventListener('click', limpiarCriterios);
 
     const btnExportar = document.getElementById('btn-exportar');
-    if(btnExportar) btnExportar.addEventListener('click', exportarExcel);
+    if (btnExportar) btnExportar.addEventListener('click', exportarExcel);
 
     const btnBuscarHistorico = document.getElementById('btn-buscar-historico');
-    if(btnBuscarHistorico) btnBuscarHistorico.addEventListener('click', filtrarHistoricoFirestore);
+    if (btnBuscarHistorico) btnBuscarHistorico.addEventListener('click', filtrarHistoricoFirestore);
 
     const btnLogout = document.getElementById('btn-logout');
-
     if (btnLogout) {
-
         btnLogout.addEventListener('click', async () => {
-
             const respuesta = await Swal.fire({
                 title: 'Cerrar sesión',
                 text: '¿Desea salir de SGCMED?',
@@ -488,31 +1644,137 @@ document.addEventListener('DOMContentLoaded', async () => {
                 cancelButtonText: 'Cancelar'
             });
 
-            if (!respuesta.isConfirmed) {
-                return;
+            if (!respuesta.isConfirmed) return;
+
+            try {
+                // 🔹 Si hay conexión, cerrar sesión en Firebase
+                if (navigator.onLine) {
+                    await signOut(auth);
+                }
+
+                // 🔹 Siempre limpiar datos locales (offline + respaldo)
+                
+                await dbDelete("usuarios", "offlineUser");
+               /* const backup = await dbGetAll("expedientes");
+                if (backup && backup.length > 0) {
+                    for (const exp of backup) {
+                        await dbDelete("expedientes", exp.id);
+                    }
+                }*/
+
+                console.log("🚪 Sesión cerrada correctamente (online/offline).");
+                window.location.href = 'login.html';
+            } catch (error) {
+                console.error(error);
+                Swal.fire('Error','No fue posible cerrar la sesión.','error');
+            }
+        });
+    }
+        document.getElementById('btn-diagnostico')?.addEventListener('click', async () => {
+        const panel = document.getElementById('panel-diagnostico');
+        if (!panel) return;
+
+        // 🔹 Mostrar/ocultar panel
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+
+        try {
+            await renderizarPanelDiagnostico();
+        } catch (e) {
+            console.warn("⚠️ Diagnóstico parcial (offline).", e);
+
+            // 🔹 Internet y Firebase caen
+            document.getElementById('estado-internet').innerText = "Internet: 🔴 Offline";
+            document.getElementById('estado-firebase').innerText = "Firebase: 🔴 Sin conexión";
+
+            // 🔹 Pero IndexedDB y cola sí se pueden leer
+            try {
+            const expedientes = await dbGetAll("expedientes");
+            const totalExpedientes = expedientes ? expedientes.length : 0;
+            document.getElementById('estado-indexeddb').innerText =
+                `IndexedDB: 🟢 Disponible (Expedientes: ${totalExpedientes})`;
+            } catch {
+            document.getElementById('estado-indexeddb').innerText = "IndexedDB: 🔴 Error";
             }
 
             try {
+            const cola = await dbGetAll("cola_sincronizacion");
+            const pendientes = cola ? cola.length : 0;
+            document.getElementById('estado-cola').innerText = `Cola pendientes: ${pendientes}`;
+            } catch {
+            document.getElementById('estado-cola').innerText = "Cola pendientes: ?";
+            }
+        }
+        });
 
-                await signOut(auth);
+        document.getElementById('btn-cerrar-diagnostico')?.addEventListener('click', () => {
+            const panel = document.getElementById('panel-diagnostico');
+            if (panel) panel.style.display = 'none';
+        });
 
-                localStorage.removeItem('sgcmed_expedientes_backup');
+        const btnParametros = document.getElementById('btn-parametros');
+        if (btnParametros) {
+            btnParametros.addEventListener('click', () => {
+                console.log("⚙️ Redirigiendo a parámetros del sistema...");
+                window.location.href = 'parametros.html';
+            });
+        }
 
-                window.location.href = 'login.html';
+
+        document
+        .getElementById("btn-refrescar-panel")
+        ?.addEventListener("click", async () => {
+
+            console.log(
+            "🔄 Refresco manual del panel..."
+            );
+
+            mostrarEstadoTemporal();
+
+            try {
+
+            await new Promise(
+                resolve => setTimeout(resolve, 50)
+            );
+
+            const internetReal =
+                await verificarInternetReal();
+
+            if (internetReal) {
+
+                console.log(
+                "🌐 Internet disponible. Procesando cola..."
+                );
+
+                await procesarColaSincronizacion();
+
+            } else {
+
+                console.log(
+                "📴 Sin Internet real. Solo se actualizará información local."
+                );
+            }
+
+            await renderizarPanelDiagnostico();
+
+            // En búsqueda también tenemos que
+            // reevaluar el botón Parámetros
+            await gestionarBotonParametros();
+
+            console.log(
+                "✅ Refresco manual terminado."
+            );
 
             } catch (error) {
 
-                console.error(error);
+            console.error(
+                "❌ Error durante refresco manual:",
+                error
+            );
 
-                Swal.fire(
-                    'Error',
-                    'No fue posible cerrar la sesión.',
-                    'error'
-                );
+            await renderizarPanelDiagnostico();
 
             }
 
         });
-
-    }
 });
+

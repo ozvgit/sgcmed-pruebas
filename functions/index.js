@@ -21,7 +21,7 @@ admin.app(),
 /**
  * 🚀 FUNCIÓN: procesarSincronizacionAuto (Mantenida intacta para compatibilidad offline)[cite: 2]
  */
-exports.procesarSincronizacionAuto = onValueCreated("/cola_sincronizacion/{id}", async (event) => {
+exports.procesarSincronizacionAutoPruebas = onValueCreated("/cola_sincronizacion/{id}", async (event) => {
     const data = event.data.val();
     const id = event.params.id;
 
@@ -92,7 +92,7 @@ exports.ejecutarDepuracionHistoricaPruebas = onSchedule({
                 `[${new Date().toLocaleTimeString()}] ⚠️ No se encontraron expedientes en el nodo principal.`
             );
 
-            await registrarLogMantenimiento(
+            await registrarLogMantenimientoPruebas(
                 timestampInicio,
                 "CONCLUIDO_SIN_DATOS",
                 0,
@@ -107,6 +107,8 @@ exports.ejecutarDepuracionHistoricaPruebas = onSchedule({
 
         const LIMITE_RETENCION_MS =
             365 * 24 * 60 * 60 * 1000;
+        //const LIMITE_RETENCION_MS =
+        //5 * 365 * 24 * 60 * 60 * 1000;
 
         const fechaCorte =
             timestampInicio - LIMITE_RETENCION_MS;
@@ -248,7 +250,7 @@ exports.ejecutarDepuracionHistoricaPruebas = onSchedule({
 
     } finally {
 
-        await registrarLogMantenimiento(
+        await registrarLogMantenimientoPruebas(
             timestampInicio,
             estadoFinal,
             expedientesEvaluados,
@@ -263,7 +265,7 @@ exports.ejecutarDepuracionHistoricaPruebas = onSchedule({
 /**
  * Auxiliar: Registra el Log de mantenimiento, purga reportes obsoletos y DISPARA EL CORREO DIRECTO[cite: 2]
  */
-async function registrarLogMantenimiento(timestampInicio, estado, evaluados, depurados, logArreglo) {
+async function registrarLogMantenimientoPruebas(timestampInicio, estado, evaluados, depurados, logArreglo) {
     const logId = `mantenimiento_${new Date(timestampInicio).toISOString().slice(0,10)}`;
     const duracionSegundos = ((Date.now() - timestampInicio) / 1000).toFixed(2);
     
@@ -302,7 +304,7 @@ async function registrarLogMantenimiento(timestampInicio, estado, evaluados, dep
         const opcionesCorreo = {
             from: process.env.GMAIL_USER_EMAIL,
             to: "oscarzarzalinternaverde@gmail.com",
-            subject: `🛠️ [SGI-SGCMED] - LOG DE MANTENIMIENTO CORRESPONDIENTE AL ${new Date(timestampInicio).toLocaleDateString()}`,
+            subject: `🛠️ [SGI-SGCMED] - LOG DE MANTENIMIENTO - Pruebas CORRESPONDIENTE AL ${new Date(timestampInicio).toLocaleDateString()}`,
             text: `REPORTE DE OPERACIÓN Y LOGS DE AUDITORÍA CENTRALIZADA\n\n` +
                   `• Fecha de Ejecución: ${payloadLog.fechaEjecucion}\n` +
                   `• Estado General: ${payloadLog.estadoGeneral}\n` +
@@ -357,7 +359,7 @@ exports.administrarExpedientePruebas = onCall(async (request) => {
 
     try {
         switch (accion) {
-            case 'guardar':
+            /*case 'guardar':
                 if (!datos.id) throw new HttpsError("invalid-argument", "ID requerido.");
                 const pacienteId = datos.id.toLowerCase().trim();
                 const docRef = db.ref(`${PATH_BD}/${pacienteId}`);
@@ -371,7 +373,86 @@ exports.administrarExpedientePruebas = onCall(async (request) => {
 
                     await visitaRef.set({ ...datos.consultaActual, fecha: admin.database.ServerValue.TIMESTAMP });
                 }
+                // Recalcular auxiliares
+                const visitasSnap = await docRef.child('visitas').get();
+                if (visitasSnap.exists()) {
+                    const visitas = visitasSnap.val();
+                    const ultimaId = Object.keys(visitas).pop();
+                    const ultimaVisita = visitas[ultimaId]?.fechaVisita || null;
+
+                    await docRef.update({
+                        esRegistroHistorico: false,
+                        ultimaVisitaId: ultimaId,
+                        ultimaVisita: ultimaVisita
+                    });
+                } else {
+                    await docRef.update({
+                        esRegistroHistorico: true,
+                        ultimaVisitaId: null,
+                        ultimaVisita: null
+                    });
+                }                
                 await docRef.update({ id: pacienteId, ultimaModificacion: admin.database.ServerValue.TIMESTAMP });
+                return { success: true, message: "Sincronizado correctamente.", id: pacienteId };
+            */
+            case 'guardar':
+                if (!datos.id) throw new HttpsError("invalid-argument", "ID requerido.");
+                const pacienteId = datos.id.toLowerCase().trim();
+                const docRef = db.ref(`${PATH_BD}/${pacienteId}`);
+                
+                if (datos.historiaClinica) {
+                    await docRef.child('historiaClinica').update(datos.historiaClinica);
+                }
+
+                if (datos.consultaActual) {
+                    let visitaRef = (datos.visitaId && datos.visitaId !== "null") 
+                        ? docRef.child('visitas').child(datos.visitaId) 
+                        : docRef.child('visitas').push();
+
+                    await visitaRef.set({ 
+                        ...datos.consultaActual, 
+                        fecha: admin.database.ServerValue.TIMESTAMP 
+                    });
+                }
+
+                // 🔹 Recalcular auxiliares correctamente
+                const visitasSnap = await docRef.child('visitas').get();
+                if (visitasSnap.exists()) {
+                    const visitas = visitasSnap.val();
+
+                    let ultimaId = null;
+                    let ultimaFecha = new Date(0);
+
+                    Object.entries(visitas).forEach(([id, v]) => {
+                        // Usar fechaVisita si existe, si no usar timestamp
+                        const fechaVisita = v.fechaVisita 
+                            ? new Date(v.fechaVisita) 
+                            : (v.fecha ? new Date(v.fecha) : null);
+
+                        if (fechaVisita && fechaVisita > ultimaFecha) {
+                            ultimaFecha = fechaVisita;
+                            ultimaId = id;
+                        }
+                    });
+
+                    await docRef.update({
+                        esRegistroHistorico: false,
+                        ultimaVisitaId: ultimaId,
+                        ultimaVisita: ultimaId ? visitas[ultimaId].fechaVisita || null : null
+                    });
+                } else {
+                    await docRef.update({
+                        esRegistroHistorico: true,
+                        ultimaVisitaId: null,
+                        ultimaVisita: null
+                    });
+                }
+
+                await docRef.update({ 
+                    id: pacienteId, 
+                    ultimaModificacion: admin.database.ServerValue.TIMESTAMP 
+                });
+
                 return { success: true, message: "Sincronizado correctamente.", id: pacienteId };
 
             case 'eliminar':
@@ -457,7 +538,7 @@ exports.administrarExpedientePruebas = onCall(async (request) => {
 /**
  * Cloud Function: administrarConfiguracion (Mantenida para compatibilidad de paginación)[cite: 2]
  */
-exports.administrarConfiguracion = onCall(async (request) => {
+exports.administrarConfiguracionPruebas = onCall(async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Acceso denegado.");
     const { accion, datos } = request.data;
     const PATH_CFG = 'parametros/global';

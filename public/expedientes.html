@@ -13,8 +13,29 @@
         <button onclick="window.location.href='index.html'" class="btn" style="background: var(--secondary); color: white; padding: 10px 20px; width: auto; margin: 0;">⬅️ Volver</button>
         <h1 style="margin: 0; font-size: 1.5rem;">⚕️ Gestión de Expediente v2.3</h1>
         <button id="btn-logout" class="btn" style="background:#dc3545;color:white;padding:10px 20px;width:auto;margin:0;">🚪 Salir</button>
-    </div>
+        <button id="btn-diagnostico" class="btn" style="background:#6c757d;color:white;padding:10px 20px;width:auto;margin:0;">⚙️ Diagnóstico</button>
+        <!--div id="estado-autoguardado" style="
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: #f0f0f0;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 12px;
+            color: #333;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        ">
+            <span id="icono-estado">⏳</span>
+            <span id="texto-estado">Esperando autoguardado...</span>
+            <span id="contador">30s</span>
+        </div-->
 
+
+    </div>
+    <div id="status"></div>
     <div class="card" style="margin-top: 20px;">
         <form id="form-expediente">
             <input type="hidden" id="edit-id"> 
@@ -154,16 +175,17 @@
     </div>
 
     <div id="print-prescription-container"></div>
+    <div id="panel-diagnostico" style="display:none; position:fixed; top:15%; right:5%; background:#fff; border:1px solid #ccc; padding:15px; width:280px; box-shadow:0 2px 8px rgba(0,0,0,0.2); z-index:999;">
+    <h4 style="margin-top:0;">Panel de Diagnóstico</h4>
+    <button id="btn-cerrar-diagnostico" style="background:#dc3545; color:white; border:none; padding:5px 10px; cursor:pointer;">✖</button>
+    <button id="btn-refrescar-panel" style="background:#007bff; color:white; border:none; padding:5px 10px; cursor:pointer;">🔄 </button>
+     <div id="estado-internet"></div>
+    <div id="estado-firebase"></div>
+    <div id="estado-indexeddb"></div>
+    <div id="estado-cola"></div>
+    </div>
 
     <script type="module" src="/js/app-pruebas.js"></script>
-    <!--script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('✅ Service Worker registrado', reg))
-            .catch(err => console.warn('❌ Fallo al registrar Service Worker', err));
-        });
-      }
-    </script-->
+
 </body>
 </html>
